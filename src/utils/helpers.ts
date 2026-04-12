@@ -26,8 +26,10 @@ export const calculateProjectedBalanceForDate = (
   transactions: Transaction[],
 ): number => {
   const initialBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
   const relevantAmount = transactions
-    .filter(t => t.date <= targetDate)
+    .filter(t => t.date > today && t.date <= targetDate)
     .reduce((sum, t) => sum + t.amount, 0)
   return initialBalance + relevantAmount
 }
