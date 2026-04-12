@@ -1,0 +1,5 @@
+{
+  "name": "FlowFinance",
+  "description": "A personal finance management web application with a calendar-based interface focused on cash flow visualization and planning, designed with macOS aesthetics.",
+  "requestFramePermissions": []
+}
