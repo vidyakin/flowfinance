@@ -5,11 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "bun --watch server/index.ts",
+    "dev:all": "concurrently \"bun run dev\" \"bun run dev:server\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "bun run server/index.ts",
+    "test": "bun test server/tests"
   },
   "dependencies": {
     "chart.js": "^4.4.0",
+    "hono": "^4.12.12",
     "pinia": "^2.3.0",
     "playwright": "^1.59.1",
     "vue": "^3.5.0",
@@ -21,6 +26,7 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
     "postcss": "^8.5.9",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.8.2",

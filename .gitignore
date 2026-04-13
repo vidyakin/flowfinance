@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SQLite database
+data/flowfinance.db
+data/flowfinance.db-shm
+data/flowfinance.db-wal
