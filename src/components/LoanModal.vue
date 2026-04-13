@@ -28,6 +28,7 @@ const accountId = ref(store.accounts[0]?.id ?? '')
 const currentBalanceAmount = ref(0)
 const currentBalanceDate = ref(today)
 const insurancePerMonth = ref(0)
+const paymentDay = ref(new Date().getDate())
 
 // ── Create mode computed ─────────────────────────────────────────────
 const effectivePrincipal = computed(() =>
@@ -97,6 +98,7 @@ watch(() => props.modelValue, (newVal) => {
     currentBalanceAmount.value = 0
     currentBalanceDate.value = today
     insurancePerMonth.value = 0
+    paymentDay.value = new Date().getDate()
   }
 })
 
@@ -120,6 +122,7 @@ function submit() {
         date: new Date(currentBalanceDate.value),
         balance: currentBalanceAmount.value,
       },
+      paymentDay: paymentDay.value,
       ...(insurancePerMonth.value > 0 && { insurancePerMonth: insurancePerMonth.value }),
     })
   } else {
@@ -131,6 +134,7 @@ function submit() {
       termMonths: termMonths.value,
       accountId: accountId.value,
       categoryId: 'cat6',
+      paymentDay: paymentDay.value,
       ...(insurancePerMonth.value > 0 && { insurancePerMonth: insurancePerMonth.value }),
     })
   }
@@ -292,8 +296,8 @@ function markPaid() {
             </div>
           </template>
 
-          <!-- Annual Rate / Term / Start Date — one row -->
-          <div class="grid grid-cols-3 gap-2">
+          <!-- Annual Rate / Term / Start Date / Payment Day — one row -->
+          <div class="grid grid-cols-4 gap-2">
             <div>
               <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('annualRate') }}</label>
               <input
@@ -320,6 +324,16 @@ function markPaid() {
               <input
                 v-model="startDate"
                 type="date"
+                class="w-full px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('paymentDay') }}</label>
+              <input
+                v-model.number="paymentDay"
+                type="number"
+                min="1"
+                max="28"
                 class="w-full px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

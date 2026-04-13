@@ -30,6 +30,21 @@ export function calculateRemainingTerm(
   return Math.ceil(Math.log(monthlyPayment / (monthlyPayment - r * balance)) / Math.log(1 + r))
 }
 
+/**
+ * Adjusts segmentDate to the nearest future occurrence of paymentDay.
+ * If that day has already passed in the current month, moves to next month.
+ */
+function applyPaymentDay(from: Date, paymentDay: number): Date {
+  const clampDay = (year: number, month: number) =>
+    Math.min(paymentDay, new Date(year, month + 1, 0).getDate())
+  const candidate = new Date(from.getFullYear(), from.getMonth(), clampDay(from.getFullYear(), from.getMonth()))
+  if (candidate <= from) {
+    const nm = new Date(from.getFullYear(), from.getMonth() + 1, 1)
+    return new Date(nm.getFullYear(), nm.getMonth(), clampDay(nm.getFullYear(), nm.getMonth()))
+  }
+  return candidate
+}
+
 function monthsBetween(start: Date, end: Date): number {
   return (
     (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
@@ -127,10 +142,15 @@ export function generateLoanTransactions(loan: Loan): Transaction[] {
     const endDate = new Date(loan.startDate)
     endDate.setMonth(endDate.getMonth() + loan.termMonths)
     segmentTerm = Math.max(1, monthsBetween(segmentDate, endDate))
+    if (loan.paymentDay) segmentDate = applyPaymentDay(segmentDate, loan.paymentDay)
   } else {
     segmentDate = new Date(loan.startDate)
     segmentBalance = loan.principal
     segmentTerm = loan.termMonths
+    if (loan.paymentDay) {
+      const d = Math.min(loan.paymentDay, new Date(segmentDate.getFullYear(), segmentDate.getMonth() + 1, 0).getDate())
+      segmentDate = new Date(segmentDate.getFullYear(), segmentDate.getMonth(), d)
+    }
   }
 
   const sortedEarlyPayments = [...loan.earlyPayments]
