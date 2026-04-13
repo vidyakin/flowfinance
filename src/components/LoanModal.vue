@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -79,6 +79,22 @@ const paidCount = computed(() => {
 const totalCount = computed(() => {
   if (!props.viewLoan) return 0
   return store.getLoanTotalPayments(props.viewLoan)
+})
+
+// ── Watchers ─────────────────────────────────────────────────────────
+// Reset create mode state when modal closes
+watch(() => props.modelValue, (newVal) => {
+  if (!newVal && !isViewMode.value) {
+    alreadyPaying.value = false
+    name.value = ''
+    principal.value = 0
+    annualRate.value = 0
+    termMonths.value = 12
+    startDate.value = today
+    accountId.value = store.accounts[0]?.id ?? ''
+    currentBalanceAmount.value = 0
+    currentBalanceDate.value = today
+  }
 })
 
 // ── Actions ──────────────────────────────────────────────────────────
