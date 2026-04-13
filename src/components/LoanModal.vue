@@ -355,11 +355,11 @@ function markPaid() {
             <p class="font-semibold text-blue-700 dark:text-blue-300 mb-2">── {{ t('preview') }} ──</p>
             <div class="flex justify-between text-gray-700 dark:text-gray-300">
               <span>{{ t('monthlyPayment') }}:</span>
-              <span class="font-mono font-semibold">{{ format(monthlyPayment) }}</span>
+              <span class="font-mono font-semibold">{{ format(totalMonthlyWithInsurance) }}</span>
             </div>
-            <div v-if="insurancePerMonth > 0" class="flex justify-between text-gray-700 dark:text-gray-300">
-              <span>{{ t('totalMonthlyWithInsurance') }}:</span>
-              <span class="font-mono font-semibold text-orange-500">{{ format(totalMonthlyWithInsurance) }}</span>
+            <div v-if="insurancePerMonth > 0" class="flex justify-between text-gray-500 dark:text-gray-400 text-xs">
+              <span>{{ t('insurancePerMonth') }}:</span>
+              <span class="font-mono">{{ format(monthlyPayment) }} + {{ format(insurancePerMonth) }}</span>
             </div>
             <div class="flex justify-between text-gray-700 dark:text-gray-300">
               <span>{{ t('totalPayments') }}:</span>

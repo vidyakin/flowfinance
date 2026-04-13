@@ -185,7 +185,7 @@ export const useFinanceStore = defineStore('finance', () => {
   }
 
   function getLoanMonthlyPayment(loan: Loan): number {
-    return getLoanStateAtDate(loan, new Date()).monthlyPayment
+    return getLoanStateAtDate(loan, new Date()).monthlyPayment + (loan.insurancePerMonth ?? 0)
   }
 
   function getLoanPaidCount(loan: Loan): number {
