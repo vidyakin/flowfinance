@@ -63,4 +63,5 @@ export interface Loan {
     balance: number
   }
   earlyPayments: EarlyPayment[]
+  insurancePerMonth?: number
 }

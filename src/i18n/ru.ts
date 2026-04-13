@@ -76,6 +76,8 @@ export default {
   overpayment: 'Переплата',
   lastPayment: 'Последний платёж',
   createLoan: 'Создать кредит',
+  insurancePerMonth: 'Страховка в месяц (необязательно)',
+  totalMonthlyWithInsurance: 'Итого в месяц (с учётом страховки)',
   preview: 'Предварительный расчёт',
   deleteLoan: 'Удалить кредит',
 

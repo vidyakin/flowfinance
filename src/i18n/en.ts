@@ -76,6 +76,8 @@ export default {
   overpayment: 'Overpayment',
   lastPayment: 'Last Payment',
   createLoan: 'Create Loan',
+  insurancePerMonth: 'Insurance per month (optional)',
+  totalMonthlyWithInsurance: 'Total per month (incl. insurance)',
   preview: 'Preview',
   deleteLoan: 'Delete Loan',
 

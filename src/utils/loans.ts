@@ -146,11 +146,12 @@ export function generateLoanTransactions(loan: Loan): Transaction[] {
 
     // Generate regular payments before the early payment date
     while (segmentDate < epDate && segmentTerm > 0) {
+      const insurance = loan.insurancePerMonth ?? 0
       transactions.push({
         id: `loan-${loan.id}-${paymentIndex}`,
         date: new Date(segmentDate),
         description: loan.name,
-        amount: -monthlyPayment,
+        amount: -(monthlyPayment + insurance),
         type: 'planned',
         categoryId: loan.categoryId,
         accountId: loan.accountId,
@@ -191,11 +192,12 @@ export function generateLoanTransactions(loan: Loan): Transaction[] {
 
   // Generate remaining regular payments
   for (let i = 0; i < segmentTerm && segmentBalance > 0; i++) {
+    const insurance = loan.insurancePerMonth ?? 0
     transactions.push({
       id: `loan-${loan.id}-${paymentIndex}`,
       date: new Date(segmentDate),
       description: loan.name,
-      amount: -monthlyPayment,
+      amount: -(monthlyPayment + insurance),
       type: 'planned',
       categoryId: loan.categoryId,
       accountId: loan.accountId,

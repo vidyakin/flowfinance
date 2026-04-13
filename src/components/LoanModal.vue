@@ -27,6 +27,7 @@ const startDate = ref(today)
 const accountId = ref(store.accounts[0]?.id ?? '')
 const currentBalanceAmount = ref(0)
 const currentBalanceDate = ref(today)
+const insurancePerMonth = ref(0)
 
 // ── Create mode computed ─────────────────────────────────────────────
 const effectivePrincipal = computed(() =>
@@ -47,7 +48,8 @@ const effectiveTerm = computed(() => {
 const monthlyPayment = computed(() =>
   calculateAnnuityPayment(effectivePrincipal.value, annualRate.value, effectiveTerm.value),
 )
-const totalPayments = computed(() => monthlyPayment.value * effectiveTerm.value)
+const totalMonthlyWithInsurance = computed(() => monthlyPayment.value + (insurancePerMonth.value || 0))
+const totalPayments = computed(() => totalMonthlyWithInsurance.value * effectiveTerm.value)
 const overpayment = computed(() => totalPayments.value - effectivePrincipal.value)
 const lastPaymentDate = computed(() => {
   const baseDate = alreadyPaying.value ? currentBalanceDate.value : startDate.value
@@ -94,6 +96,7 @@ watch(() => props.modelValue, (newVal) => {
     accountId.value = store.accounts[0]?.id ?? ''
     currentBalanceAmount.value = 0
     currentBalanceDate.value = today
+    insurancePerMonth.value = 0
   }
 })
 
@@ -117,6 +120,7 @@ function submit() {
         date: new Date(currentBalanceDate.value),
         balance: currentBalanceAmount.value,
       },
+      ...(insurancePerMonth.value > 0 && { insurancePerMonth: insurancePerMonth.value }),
     })
   } else {
     store.addLoan({
@@ -127,6 +131,7 @@ function submit() {
       termMonths: termMonths.value,
       accountId: accountId.value,
       categoryId: 'cat6',
+      ...(insurancePerMonth.value > 0 && { insurancePerMonth: insurancePerMonth.value }),
     })
   }
   close()
@@ -165,6 +170,10 @@ function markPaid() {
             <div class="flex justify-between text-gray-700 dark:text-gray-300">
               <span>{{ t('monthlyPayment') }}:</span>
               <span class="font-mono font-semibold">{{ format(store.getLoanMonthlyPayment(viewLoan)) }}</span>
+            </div>
+            <div v-if="viewLoan.insurancePerMonth" class="flex justify-between text-gray-700 dark:text-gray-300">
+              <span>{{ t('insurancePerMonth') }}:</span>
+              <span class="font-mono text-orange-500">{{ format(viewLoan.insurancePerMonth) }}</span>
             </div>
             <div class="flex justify-between text-gray-700 dark:text-gray-300">
               <span>{{ t('annualRate') }}:</span>
@@ -329,6 +338,17 @@ function markPaid() {
             </select>
           </div>
 
+          <!-- Insurance -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('insurancePerMonth') }}</label>
+            <input
+              v-model.number="insurancePerMonth"
+              type="number"
+              min="0"
+              class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <!-- Preview -->
           <div
             v-if="effectivePrincipal > 0 && termMonths > 0"
@@ -338,6 +358,10 @@ function markPaid() {
             <div class="flex justify-between text-gray-700 dark:text-gray-300">
               <span>{{ t('monthlyPayment') }}:</span>
               <span class="font-mono font-semibold">{{ format(monthlyPayment) }}</span>
+            </div>
+            <div v-if="insurancePerMonth > 0" class="flex justify-between text-gray-700 dark:text-gray-300">
+              <span>{{ t('totalMonthlyWithInsurance') }}:</span>
+              <span class="font-mono font-semibold text-orange-500">{{ format(totalMonthlyWithInsurance) }}</span>
             </div>
             <div class="flex justify-between text-gray-700 dark:text-gray-300">
               <span>{{ t('totalPayments') }}:</span>
