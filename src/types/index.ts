@@ -42,6 +42,13 @@ export interface RecurringRule {
   dayOfMonth?: number
 }
 
+export interface EarlyPayment {
+  id: string
+  date: Date
+  amount: number
+  mode: 'reduce_term' | 'reduce_payment'
+}
+
 export interface Loan {
   id: string
   name: string
@@ -51,4 +58,9 @@ export interface Loan {
   termMonths: number
   accountId: string
   categoryId: string
+  currentBalance?: {
+    date: Date
+    balance: number
+  }
+  earlyPayments: EarlyPayment[]
 }
