@@ -1,5 +1,7 @@
 import type { Loan, Transaction } from '@/types'
 
+const MAX_LOAN_MONTHS = 600 // 50 years safety cap
+
 export function calculateAnnuityPayment(
   principal: number,
   annualRate: number,
@@ -35,8 +37,12 @@ function monthsBetween(start: Date, end: Date): number {
 }
 
 function addOneMonth(date: Date): Date {
+  const day = date.getDate()
   const next = new Date(date)
   next.setMonth(next.getMonth() + 1)
+  // Clamp to last valid day if month overflow (e.g., Jan 31 → Feb 28)
+  const maxDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+  next.setDate(Math.min(day, maxDay))
   return next
 }
 
@@ -68,7 +74,7 @@ export function getLoanStateAtDate(
   }
 
   const sortedEarlyPayments = [...loan.earlyPayments]
-    .filter((ep) => new Date(ep.date) < atDate)
+    .filter((ep) => new Date(ep.date) < atDate && new Date(ep.date) >= segmentDate)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   let monthlyPayment = calculateAnnuityPayment(balance, loan.annualRate, term)
@@ -87,7 +93,10 @@ export function getLoanStateAtDate(
     if (balance <= 0) return { balance: 0, monthlyPayment, remainingTerm: 0 }
 
     if (ep.mode === 'reduce_term') {
-      term = calculateRemainingTerm(balance, loan.annualRate, monthlyPayment)
+      term = Math.min(
+        calculateRemainingTerm(balance, loan.annualRate, monthlyPayment),
+        MAX_LOAN_MONTHS,
+      )
     } else {
       monthlyPayment = calculateAnnuityPayment(balance, loan.annualRate, term)
     }
@@ -124,9 +133,9 @@ export function generateLoanTransactions(loan: Loan): Transaction[] {
     segmentTerm = loan.termMonths
   }
 
-  const sortedEarlyPayments = [...loan.earlyPayments].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  )
+  const sortedEarlyPayments = [...loan.earlyPayments]
+    .filter((ep) => new Date(ep.date) >= segmentDate)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   const transactions: Transaction[] = []
   let monthlyPayment = calculateAnnuityPayment(segmentBalance, loan.annualRate, segmentTerm)
@@ -170,7 +179,10 @@ export function generateLoanTransactions(loan: Loan): Transaction[] {
     if (segmentBalance <= 0) break
 
     if (ep.mode === 'reduce_term') {
-      segmentTerm = calculateRemainingTerm(segmentBalance, loan.annualRate, monthlyPayment)
+      segmentTerm = Math.min(
+        calculateRemainingTerm(segmentBalance, loan.annualRate, monthlyPayment),
+        MAX_LOAN_MONTHS,
+      )
     } else {
       // reduce_payment: same term, lower payment
       monthlyPayment = calculateAnnuityPayment(segmentBalance, loan.annualRate, segmentTerm)
