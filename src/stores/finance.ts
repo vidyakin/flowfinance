@@ -185,17 +185,7 @@ export const useFinanceStore = defineStore('finance', () => {
   }
 
   function getLoanMonthlyPayment(loan: Loan): number {
-    if (loan.currentBalance) {
-      const endDate = new Date(loan.startDate)
-      endDate.setMonth(endDate.getMonth() + loan.termMonths)
-      const remainingTerm = Math.max(
-        1,
-        (endDate.getFullYear() - loan.currentBalance.date.getFullYear()) * 12 +
-          (endDate.getMonth() - loan.currentBalance.date.getMonth()),
-      )
-      return calculateAnnuityPayment(loan.currentBalance.balance, loan.annualRate, remainingTerm)
-    }
-    return calculateAnnuityPayment(loan.principal, loan.annualRate, loan.termMonths)
+    return getLoanStateAtDate(loan, new Date()).monthlyPayment
   }
 
   function getLoanPaidCount(loan: Loan): number {
