@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
+import { useFinanceStore } from '@/stores/finance'
 import AppHeader from '@/components/AppHeader.vue'
 import LeftSidebar from '@/components/LeftSidebar.vue'
 import MainCalendar from '@/components/MainCalendar.vue'
 import RightSidebar from '@/components/RightSidebar.vue'
 import AnalyticsPanel from '@/components/AnalyticsPanel.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
+
+const store = useFinanceStore()
+onMounted(() => store.loadInitialData())
 </script>
 
 <template>
