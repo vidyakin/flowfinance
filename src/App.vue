@@ -4,6 +4,7 @@ import LeftSidebar from '@/components/LeftSidebar.vue'
 import MainCalendar from '@/components/MainCalendar.vue'
 import RightSidebar from '@/components/RightSidebar.vue'
 import AnalyticsPanel from '@/components/AnalyticsPanel.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 </script>
 
 <template>
@@ -17,5 +18,6 @@ import AnalyticsPanel from '@/components/AnalyticsPanel.vue'
       <RightSidebar />
       <AnalyticsPanel />
     </div>
+    <SettingsModal />
   </div>
 </template>

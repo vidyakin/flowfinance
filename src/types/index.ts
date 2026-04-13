@@ -29,3 +29,26 @@ export interface Budget {
   categoryId: string
   amount: number
 }
+
+export interface RecurringRule {
+  id: string
+  name: string
+  amount: number
+  categoryId: string
+  accountId: string
+  frequency: 'weekly' | 'biweekly' | 'monthly' | 'yearly'
+  startDate: Date
+  endDate: Date | null
+  dayOfMonth?: number
+}
+
+export interface Loan {
+  id: string
+  name: string
+  principal: number
+  annualRate: number
+  startDate: Date
+  termMonths: number
+  accountId: string
+  categoryId: string
+}

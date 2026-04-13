@@ -14,6 +14,7 @@ export const CATEGORIES: Category[] = [
   { id: 'cat5', name: 'Entertainment', type: 'expense', color: 'bg-purple-500' },
   { id: 'cat6', name: 'Loans', type: 'expense', color: 'bg-red-500' },
   { id: 'cat7', name: 'Shopping', type: 'expense', color: 'bg-pink-500' },
+  { id: 'cat-adjustment', name: 'Balance Adjustment', type: 'income', color: 'bg-gray-400' },
 ]
 
 export const BUDGETS: Budget[] = [

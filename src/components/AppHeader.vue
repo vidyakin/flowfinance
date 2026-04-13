@@ -1,12 +1,24 @@
 <script setup lang="ts">
 import { useFinanceStore } from '@/stores/finance'
-import { getMonthName } from '@/utils/helpers'
+import { useSettingsStore } from '@/stores/settings'
+import { useI18n } from 'vue-i18n'
 import ChevronLeftIcon from '@/components/icons/ChevronLeftIcon.vue'
 import ChevronRightIcon from '@/components/icons/ChevronRightIcon.vue'
 import UserIcon from '@/components/icons/UserIcon.vue'
 import SettingsIcon from '@/components/icons/SettingsIcon.vue'
+import SunIcon from '@/components/icons/SunIcon.vue'
+import MoonIcon from '@/components/icons/MoonIcon.vue'
 
 const store = useFinanceStore()
+const settings = useSettingsStore()
+const { locale } = useI18n()
+
+function monthLabel(): string {
+  return store.currentDate.toLocaleDateString(locale.value === 'ru' ? 'ru-RU' : 'en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
+}
 </script>
 
 <template>
@@ -24,8 +36,8 @@ const store = useFinanceStore()
         >
           <ChevronLeftIcon class="w-5 h-5 text-gray-600 dark:text-gray-300" />
         </button>
-        <span class="font-semibold text-gray-700 dark:text-gray-200 w-32 text-center">
-          {{ getMonthName(store.currentDate.getMonth()) }} {{ store.currentDate.getFullYear() }}
+        <span class="font-semibold text-gray-700 dark:text-gray-200 w-40 text-center capitalize">
+          {{ monthLabel() }}
         </span>
         <button
           class="p-1 rounded-md hover:bg-gray-300/50 dark:hover:bg-gray-600/50 transition-colors"
@@ -36,10 +48,24 @@ const store = useFinanceStore()
       </div>
     </div>
 
-    <div class="w-1/4 flex items-center justify-end space-x-4">
-      <button class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+    <div class="w-1/4 flex items-center justify-end space-x-2">
+      <!-- Theme toggle -->
+      <button
+        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        @click="settings.toggleTheme()"
+      >
+        <SunIcon v-if="settings.theme === 'dark'" class="w-5 h-5 text-yellow-400" />
+        <MoonIcon v-else class="w-5 h-5 text-gray-600 dark:text-gray-300" />
+      </button>
+
+      <!-- Settings -->
+      <button
+        class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+        @click="settings.settingsModalOpen = true"
+      >
         <SettingsIcon class="w-5 h-5 text-gray-600 dark:text-gray-300" />
       </button>
+
       <button class="flex items-center space-x-2">
         <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
           <UserIcon class="w-5 h-5 text-gray-600" />

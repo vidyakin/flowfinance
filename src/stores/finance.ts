@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Transaction, Account, Category, Budget } from '@/types'
+import type { Transaction, Account, Category, Budget, RecurringRule, Loan } from '@/types'
 import { ACCOUNTS, CATEGORIES, BUDGETS, TRANSACTIONS } from '@/data/mockData'
 import { isSameDay, calculateProjectedBalanceForDate } from '@/utils/helpers'
+import { generateOccurrences } from '@/utils/recurring'
+import { generateLoanTransactions, calculateAnnuityPayment } from '@/utils/loans'
 
 export const useFinanceStore = defineStore('finance', () => {
   // State
@@ -12,6 +14,8 @@ export const useFinanceStore = defineStore('finance', () => {
   const budgets = ref<Budget[]>(BUDGETS)
   const currentDate = ref(new Date())
   const selectedDate = ref<Date | null>(new Date())
+  const recurringRules = ref<RecurringRule[]>([])
+  const loans = ref<Loan[]>([])
 
   // Actions
   function prevMonth() {
@@ -41,13 +45,64 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
+  function addRecurringRule(rule: Omit<RecurringRule, 'id'>) {
+    const id = crypto.randomUUID()
+    recurringRules.value.push({ ...rule, id })
+  }
+
+  function removeRecurringRule(id: string) {
+    recurringRules.value = recurringRules.value.filter(r => r.id !== id)
+  }
+
+  function updateRecurringRule(id: string, changes: Partial<RecurringRule>) {
+    const idx = recurringRules.value.findIndex(r => r.id === id)
+    if (idx !== -1) {
+      recurringRules.value[idx] = { ...recurringRules.value[idx], ...changes }
+    }
+  }
+
+  function addLoan(loan: Omit<Loan, 'id'>) {
+    const id = crypto.randomUUID()
+    const newLoan: Loan = { ...loan, id }
+    loans.value.push(newLoan)
+    const loanTransactions = generateLoanTransactions(newLoan)
+    transactions.value.push(...loanTransactions)
+  }
+
+  function removeLoan(id: string) {
+    loans.value = loans.value.filter(l => l.id !== id)
+    transactions.value = transactions.value.filter(t => !t.id.startsWith(`loan-${id}-`))
+  }
+
+  function addBalanceAdjustment(date: Date, actualBalance: number) {
+    const projected = calculateProjectedBalanceForDate(date, accounts.value, allTransactions.value)
+    const adjustment = actualBalance - projected
+    if (adjustment === 0) return
+    transactions.value.push({
+      id: crypto.randomUUID(),
+      date,
+      description: 'Balance Adjustment',
+      amount: adjustment,
+      type: 'actual',
+      categoryId: 'cat-adjustment',
+      accountId: accounts.value[0]?.id ?? '',
+    })
+  }
+
   // Getters
+  const allTransactions = computed<Transaction[]>(() => {
+    const start = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth(), 1)
+    const end = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 2, 0)
+    const virtual = recurringRules.value.flatMap(r => generateOccurrences(r, start, end))
+    return [...transactions.value, ...virtual]
+  })
+
   const totalBalance = computed(() =>
     accounts.value.reduce((sum, acc) => sum + acc.balance, 0),
   )
 
   const monthTransactions = computed(() =>
-    transactions.value.filter(
+    allTransactions.value.filter(
       t =>
         t.date.getMonth() === currentDate.value.getMonth() &&
         t.date.getFullYear() === currentDate.value.getFullYear(),
@@ -68,17 +123,27 @@ export const useFinanceStore = defineStore('finance', () => {
 
   const transactionsForSelectedDay = computed(() => {
     if (!selectedDate.value) return []
-    return transactions.value
+    return allTransactions.value
       .filter(t => isSameDay(t.date, selectedDate.value!))
       .sort((a, b) => a.amount - b.amount)
   })
 
   function getProjectedBalanceForDate(date: Date): number {
-    return calculateProjectedBalanceForDate(date, accounts.value, transactions.value)
+    return calculateProjectedBalanceForDate(date, accounts.value, allTransactions.value)
   }
 
   function getTransactionsForDate(date: Date): Transaction[] {
-    return transactions.value.filter(t => isSameDay(t.date, date))
+    return allTransactions.value.filter(t => isSameDay(t.date, date))
+  }
+
+  function getLoanMonthlyPayment(loan: Loan): number {
+    return calculateAnnuityPayment(loan.principal, loan.annualRate, loan.termMonths)
+  }
+
+  function getLoanPaidCount(loan: Loan): number {
+    return transactions.value.filter(
+      t => t.id.startsWith(`loan-${loan.id}-`) && t.type === 'actual',
+    ).length
   }
 
   return {
@@ -88,10 +153,19 @@ export const useFinanceStore = defineStore('finance', () => {
     budgets,
     currentDate,
     selectedDate,
+    recurringRules,
+    loans,
     prevMonth,
     nextMonth,
     selectDate,
     updateTransaction,
+    addRecurringRule,
+    removeRecurringRule,
+    updateRecurringRule,
+    addLoan,
+    removeLoan,
+    addBalanceAdjustment,
+    allTransactions,
     totalBalance,
     monthTransactions,
     monthlyIncome,
@@ -99,5 +173,7 @@ export const useFinanceStore = defineStore('finance', () => {
     transactionsForSelectedDay,
     getProjectedBalanceForDate,
     getTransactionsForDate,
+    getLoanMonthlyPayment,
+    getLoanPaidCount,
   }
 })

@@ -1,0 +1,87 @@
+export default {
+  // Sidebar summary
+  summary: 'Сводка',
+  totalBalance: 'Общий баланс',
+  monthlyIncome: 'Доходы за месяц',
+  monthlyExpenses: 'Расходы за месяц',
+  availableFunds: 'Доступные средства',
+  accounts: 'Счета',
+  budgetProgress: 'Исполнение бюджета',
+  recurring: 'Регулярные',
+  loans: 'Кредиты',
+  addRecurring: 'Добавить правило',
+  addLoan: 'Добавить кредит',
+  noRecurring: 'Нет регулярных правил.',
+  noLoans: 'Нет кредитов.',
+
+  // Calendar
+  actual: 'Факт',
+  plan: 'План',
+  combined: 'Все',
+  addTransaction: 'Добавить транзакцию',
+  moreItems: '+{n} ещё',
+
+  // Right sidebar
+  selectDayPrompt: 'Выберите день для просмотра деталей.',
+  noTransactions: 'Нет транзакций за этот день.',
+  transactions: 'Транзакции',
+  budgetImpact: 'Влияние на бюджет',
+  plannedLabel: 'Запланировано',
+  setActualBalance: 'Ввести фактический остаток',
+  budgetImpactPlaceholder: 'Здесь будет показан анализ влияния на бюджет.',
+
+  // Analytics
+  cashFlowForecast: 'Прогноз денежного потока',
+  balanceLabel: 'Баланс',
+
+  // Settings
+  settings: 'Настройки',
+  appearance: 'Внешний вид',
+  light: 'Светлая',
+  dark: 'Тёмная',
+  language: 'Язык',
+  currency: 'Валюта',
+  close: 'Закрыть',
+
+  // Forms common
+  name: 'Название',
+  amount: 'Сумма',
+  category: 'Категория',
+  account: 'Счёт',
+  startDate: 'Дата начала',
+  endDate: 'Дата окончания',
+  cancel: 'Отмена',
+  save: 'Сохранить',
+  create: 'Создать',
+
+  // Recurring modal
+  newRecurring: 'Новое регулярное правило',
+  editRecurring: 'Редактировать правило',
+  frequency: 'Периодичность',
+  weekly: 'Еженедельно',
+  biweekly: 'Каждые 2 недели',
+  monthly: 'Ежемесячно',
+  yearly: 'Ежегодно',
+  noEndDate: 'Без даты окончания',
+  deleteRule: 'Удалить',
+
+  // Loan modal
+  newLoan: 'Новый кредит',
+  principal: 'Сумма кредита',
+  annualRate: 'Годовая ставка (%)',
+  termMonths: 'Срок (месяцев)',
+  firstPayment: 'Дата первого платежа',
+  monthlyPayment: 'Ежемесячный платёж',
+  totalPayments: 'Итого выплат',
+  overpayment: 'Переплата',
+  lastPayment: 'Последний платёж',
+  createLoan: 'Создать кредит',
+  preview: 'Предварительный расчёт',
+  deleteLoan: 'Удалить кредит',
+
+  // Balance input modal
+  setActualBalanceTitle: 'Ввести фактический остаток',
+  projectedBalance: 'Прогнозируемый остаток',
+  actualBalance: 'Фактический остаток',
+  adjustment: 'Корректировка',
+}
