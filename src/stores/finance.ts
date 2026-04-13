@@ -1,23 +1,76 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Transaction, Account, Category, Budget, RecurringRule, Loan, EarlyPayment } from '@/types'
-import { ACCOUNTS, CATEGORIES, BUDGETS, TRANSACTIONS } from '@/data/mockData'
 import { isSameDay, calculateProjectedBalanceForDate } from '@/utils/helpers'
 import { generateOccurrences } from '@/utils/recurring'
-import { generateLoanTransactions, calculateAnnuityPayment, getLoanStateAtDate } from '@/utils/loans'
+import { getLoanStateAtDate } from '@/utils/loans'
+import { api } from '@/api/client'
+
+type LoanWithTransactions = Loan & { transactions: Transaction[] }
+
+function deserializeTransaction(t: Record<string, unknown>): Transaction {
+  return { ...t, date: new Date(t.date as string) } as Transaction
+}
+
+function deserializeRecurringRule(r: Record<string, unknown>): RecurringRule {
+  return {
+    ...r,
+    startDate: new Date(r.startDate as string),
+    endDate: r.endDate ? new Date(r.endDate as string) : null,
+  } as RecurringRule
+}
+
+function deserializeLoan(l: Record<string, unknown>): LoanWithTransactions {
+  return {
+    ...l,
+    startDate: new Date(l.startDate as string),
+    currentBalance: l.currentBalance
+      ? {
+          date: new Date((l.currentBalance as { date: string }).date),
+          balance: (l.currentBalance as { balance: number }).balance,
+        }
+      : undefined,
+    earlyPayments: ((l.earlyPayments as Record<string, unknown>[]) ?? []).map(ep => ({
+      ...ep,
+      date: new Date(ep.date as string),
+    })) as EarlyPayment[],
+    transactions: ((l.transactions as Record<string, unknown>[]) ?? []).map(deserializeTransaction),
+  } as LoanWithTransactions
+}
 
 export const useFinanceStore = defineStore('finance', () => {
-  // State
-  const transactions = ref<Transaction[]>(TRANSACTIONS)
-  const accounts = ref<Account[]>(ACCOUNTS)
-  const categories = ref<Category[]>(CATEGORIES)
-  const budgets = ref<Budget[]>(BUDGETS)
+  const transactions = ref<Transaction[]>([])
+  const accounts = ref<Account[]>([])
+  const categories = ref<Category[]>([])
+  const budgets = ref<Budget[]>([])
   const currentDate = ref(new Date())
   const selectedDate = ref<Date | null>(new Date())
   const recurringRules = ref<RecurringRule[]>([])
-  const loans = ref<Loan[]>([])
+  const loans = ref<LoanWithTransactions[]>([])
+  const loading = ref(false)
 
-  // Actions
+  async function loadInitialData(): Promise<void> {
+    loading.value = true
+    try {
+      const [accs, cats, buds, txns, rules, lns] = await Promise.all([
+        api.get<Account[]>('/accounts'),
+        api.get<Category[]>('/categories'),
+        api.get<Budget[]>('/budgets'),
+        api.get<Record<string, unknown>[]>('/transactions'),
+        api.get<Record<string, unknown>[]>('/recurring'),
+        api.get<Record<string, unknown>[]>('/loans'),
+      ])
+      accounts.value = accs ?? []
+      categories.value = cats ?? []
+      budgets.value = buds ?? []
+      transactions.value = (txns ?? []).map(deserializeTransaction)
+      recurringRules.value = (rules ?? []).map(deserializeRecurringRule)
+      loans.value = (lns ?? []).map(deserializeLoan)
+    } finally {
+      loading.value = false
+    }
+  }
+
   function prevMonth() {
     currentDate.value = new Date(
       currentDate.value.getFullYear(),
@@ -38,48 +91,97 @@ export const useFinanceStore = defineStore('finance', () => {
     selectedDate.value = date
   }
 
-  function updateTransaction(id: string, changes: Partial<Transaction>) {
-    const idx = transactions.value.findIndex(t => t.id === id)
-    if (idx !== -1) {
-      transactions.value[idx] = { ...transactions.value[idx], ...changes }
+  async function updateTransaction(id: string, changes: Partial<Transaction>): Promise<void> {
+    const payload = {
+      ...changes,
+      date: changes.date instanceof Date ? changes.date.toISOString().slice(0, 10) : changes.date,
     }
+    const updated = await api.put<Record<string, unknown>>(`/transactions/${id}`, payload)
+    const idx = transactions.value.findIndex(t => t.id === id)
+    if (idx !== -1) transactions.value[idx] = deserializeTransaction(updated)
   }
 
-  function addRecurringRule(rule: Omit<RecurringRule, 'id'>) {
-    const id = crypto.randomUUID()
-    recurringRules.value.push({ ...rule, id })
+  async function addTransaction(data: Omit<Transaction, 'id'>): Promise<void> {
+    const payload = { ...data, date: data.date.toISOString().slice(0, 10) }
+    const created = await api.post<Record<string, unknown>>('/transactions', payload)
+    transactions.value.push(deserializeTransaction(created))
   }
 
-  function removeRecurringRule(id: string) {
+  async function deleteTransaction(id: string): Promise<void> {
+    await api.delete(`/transactions/${id}`)
+    transactions.value = transactions.value.filter(t => t.id !== id)
+  }
+
+  async function addRecurringRule(rule: Omit<RecurringRule, 'id'>): Promise<void> {
+    const payload = {
+      ...rule,
+      startDate: rule.startDate instanceof Date ? rule.startDate.toISOString().slice(0, 10) : rule.startDate,
+      endDate: rule.endDate instanceof Date ? rule.endDate.toISOString().slice(0, 10) : rule.endDate,
+    }
+    const created = await api.post<Record<string, unknown>>('/recurring', payload)
+    recurringRules.value.push(deserializeRecurringRule(created))
+  }
+
+  async function removeRecurringRule(id: string): Promise<void> {
+    await api.delete(`/recurring/${id}`)
     recurringRules.value = recurringRules.value.filter(r => r.id !== id)
   }
 
-  function updateRecurringRule(id: string, changes: Partial<RecurringRule>) {
-    const idx = recurringRules.value.findIndex(r => r.id === id)
-    if (idx !== -1) {
-      recurringRules.value[idx] = { ...recurringRules.value[idx], ...changes }
+  async function updateRecurringRule(id: string, changes: Partial<RecurringRule>): Promise<void> {
+    const payload = {
+      ...changes,
+      startDate: changes.startDate instanceof Date ? changes.startDate.toISOString().slice(0, 10) : changes.startDate,
+      endDate: changes.endDate instanceof Date ? changes.endDate.toISOString().slice(0, 10) : (changes.endDate ?? null),
     }
+    const updated = await api.put<Record<string, unknown>>(`/recurring/${id}`, payload)
+    const idx = recurringRules.value.findIndex(r => r.id === id)
+    if (idx !== -1) recurringRules.value[idx] = deserializeRecurringRule(updated)
   }
 
-  function addLoan(loanData: Omit<Loan, 'id' | 'earlyPayments'>): void {
-    const id = crypto.randomUUID()
-    const newLoan: Loan = { ...loanData, id, earlyPayments: [] }
-    loans.value.push(newLoan)
-    const loanTransactions = generateLoanTransactions(newLoan)
-    transactions.value.push(...loanTransactions)
+  async function addLoan(loanData: Omit<Loan, 'id' | 'earlyPayments'>): Promise<void> {
+    const payload = {
+      ...loanData,
+      startDate: loanData.startDate instanceof Date ? loanData.startDate.toISOString().slice(0, 10) : loanData.startDate,
+    }
+    const created = await api.post<Record<string, unknown>>('/loans', payload)
+    loans.value.push(deserializeLoan(created))
   }
 
-  function removeLoan(id: string) {
+  async function removeLoan(id: string): Promise<void> {
+    await api.delete(`/loans/${id}`)
     loans.value = loans.value.filter(l => l.id !== id)
-    transactions.value = transactions.value.filter(t => !t.id.startsWith(`loan-${id}-`))
   }
 
-  function addBalanceAdjustment(date: Date, actualBalance: number) {
+  async function addEarlyPayment(loanId: string, payment: Omit<EarlyPayment, 'id'>): Promise<void> {
+    const payload = {
+      ...payment,
+      date: payment.date instanceof Date ? payment.date.toISOString().slice(0, 10) : payment.date,
+    }
+    const updated = await api.post<Record<string, unknown>>(`/loans/${loanId}/early-payments`, payload)
+    const idx = loans.value.findIndex(l => l.id === loanId)
+    if (idx !== -1) loans.value[idx] = deserializeLoan(updated)
+  }
+
+  async function setLoanCurrentBalance(loanId: string, date: Date, balance: number): Promise<void> {
+    const updated = await api.put<Record<string, unknown>>(`/loans/${loanId}`, {
+      currentBalanceDate: date.toISOString().slice(0, 10),
+      currentBalance: balance,
+    })
+    const idx = loans.value.findIndex(l => l.id === loanId)
+    if (idx !== -1) loans.value[idx] = deserializeLoan(updated)
+  }
+
+  async function markLoanPaidUpToDate(loanId: string): Promise<void> {
+    const updated = await api.put<Record<string, unknown>>(`/loans/${loanId}`, { markPaidUpToDate: true })
+    const idx = loans.value.findIndex(l => l.id === loanId)
+    if (idx !== -1) loans.value[idx] = deserializeLoan(updated)
+  }
+
+  async function addBalanceAdjustment(date: Date, actualBalance: number): Promise<void> {
     const projected = calculateProjectedBalanceForDate(date, accounts.value, allTransactions.value)
     const adjustment = actualBalance - projected
     if (adjustment === 0) return
-    transactions.value.push({
-      id: crypto.randomUUID(),
+    await addTransaction({
       date,
       description: 'Balance Adjustment',
       amount: adjustment,
@@ -89,12 +191,12 @@ export const useFinanceStore = defineStore('finance', () => {
     })
   }
 
-  // Getters
   const allTransactions = computed<Transaction[]>(() => {
     const start = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth(), 1)
     const end = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 2, 0)
     const virtual = recurringRules.value.flatMap(r => generateOccurrences(r, start, end))
-    return [...transactions.value, ...virtual]
+    const loanTxns = loans.value.flatMap(l => l.transactions)
+    return [...transactions.value, ...loanTxns, ...virtual]
   })
 
   const totalBalance = computed(() =>
@@ -136,52 +238,14 @@ export const useFinanceStore = defineStore('finance', () => {
     return allTransactions.value.filter(t => isSameDay(t.date, date))
   }
 
-  function _regenerateLoanTransactions(loan: Loan): void {
-    transactions.value = transactions.value.filter(t => !t.id.startsWith(`loan-${loan.id}-`))
-    transactions.value.push(...generateLoanTransactions(loan))
-  }
-
-  function addEarlyPayment(loanId: string, payment: Omit<EarlyPayment, 'id'>): void {
-    const loan = loans.value.find(l => l.id === loanId)
-    if (!loan) return
-    const newPayment: EarlyPayment = { ...payment, id: crypto.randomUUID() }
-    loan.earlyPayments.push(newPayment)
-    _regenerateLoanTransactions(loan)
-  }
-
-  function setLoanCurrentBalance(loanId: string, date: Date, balance: number): void {
-    const loan = loans.value.find(l => l.id === loanId)
-    if (!loan) return
-    loan.currentBalance = { date, balance }
-    _regenerateLoanTransactions(loan)
-  }
-
-  function markLoanPaidUpToDate(loanId: string): void {
-    const today = new Date()
-    today.setHours(23, 59, 59, 999)
-    transactions.value = transactions.value.map(t => {
-      if (
-        t.id.startsWith(`loan-${loanId}-`) &&
-        !t.id.includes('-early-') &&
-        t.date <= today &&
-        t.type === 'planned'
-      ) {
-        return { ...t, type: 'actual' as const }
-      }
-      return t
-    })
-  }
-
   function getLoanTransactions(loanId: string): Transaction[] {
-    return transactions.value
-      .filter(t => t.id.startsWith(`loan-${loanId}-`))
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
+    const loan = loans.value.find(l => l.id === loanId)
+    return loan?.transactions.sort((a, b) => a.date.getTime() - b.date.getTime()) ?? []
   }
 
   function getLoanTotalPayments(loan: Loan): number {
-    return transactions.value.filter(
-      t => t.id.startsWith(`loan-${loan.id}-`) && !t.id.includes('-early-'),
-    ).length
+    const found = loans.value.find(l => l.id === loan.id)
+    return found?.transactions.filter(t => !t.id.includes('-early-')).length ?? 0
   }
 
   function getLoanMonthlyPayment(loan: Loan): number {
@@ -189,9 +253,8 @@ export const useFinanceStore = defineStore('finance', () => {
   }
 
   function getLoanPaidCount(loan: Loan): number {
-    return transactions.value.filter(
-      t => t.id.startsWith(`loan-${loan.id}-`) && t.type === 'actual',
-    ).length
+    const found = loans.value.find(l => l.id === loan.id)
+    return found?.transactions.filter(t => t.type === 'actual').length ?? 0
   }
 
   return {
@@ -203,10 +266,14 @@ export const useFinanceStore = defineStore('finance', () => {
     selectedDate,
     recurringRules,
     loans,
+    loading,
+    loadInitialData,
     prevMonth,
     nextMonth,
     selectDate,
     updateTransaction,
+    addTransaction,
+    deleteTransaction,
     addRecurringRule,
     removeRecurringRule,
     updateRecurringRule,
