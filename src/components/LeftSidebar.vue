@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useCurrency } from '@/composables/useCurrency'
 import { useI18n } from 'vue-i18n'
-import { calculateAnnuityPayment } from '@/utils/loans'
 import AppCard from '@/components/ui/AppCard.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import TrendingUpIcon from '@/components/icons/TrendingUpIcon.vue'
@@ -11,7 +10,8 @@ import PlusIcon from '@/components/icons/PlusIcon.vue'
 import RepeatIcon from '@/components/icons/RepeatIcon.vue'
 import RecurringRuleModal from '@/components/RecurringRuleModal.vue'
 import LoanModal from '@/components/LoanModal.vue'
-import type { RecurringRule } from '@/types'
+import EarlyPaymentModal from '@/components/EarlyPaymentModal.vue'
+import type { RecurringRule, Loan } from '@/types'
 
 const store = useFinanceStore()
 const { format } = useCurrency()
@@ -45,6 +45,22 @@ function openEditRule(rule: RecurringRule) {
 function openNewRecurring() {
   editingRule.value = undefined
   showRecurringModal.value = true
+}
+
+const viewingLoan = ref<Loan | undefined>(undefined)
+const showViewLoanModal = ref(false)
+const showEarlyPaymentForLoan = ref(false)
+const earlyPaymentTargetLoan = ref<Loan | undefined>(undefined)
+
+function openViewLoan(loan: Loan) {
+  viewingLoan.value = loan
+  showViewLoanModal.value = true
+}
+
+function openEarlyPayment(loan: Loan, event: Event) {
+  event.stopPropagation()
+  earlyPaymentTargetLoan.value = loan
+  showEarlyPaymentForLoan.value = true
 }
 
 const freqLabels: Record<RecurringRule['frequency'], string> = {
@@ -176,19 +192,31 @@ const freqLabels: Record<RecurringRule['frequency'], string> = {
         {{ t('noLoans') }}
       </p>
       <ul v-else class="space-y-3">
-        <li v-for="loan in store.loans" :key="loan.id" class="text-sm">
-          <div class="flex justify-between mb-1">
-            <span class="font-medium text-gray-700 dark:text-gray-200">{{ loan.name }}</span>
-            <span class="font-mono text-red-400">
-              {{ format(calculateAnnuityPayment(loan.principal, loan.annualRate, loan.termMonths)) }}/mo
-            </span>
+        <li
+          v-for="loan in store.loans"
+          :key="loan.id"
+          class="text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg p-1 -mx-1 transition-colors"
+          @click="openViewLoan(loan)"
+        >
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-medium text-gray-700 dark:text-gray-200 truncate max-w-[120px]">{{ loan.name }}</span>
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <span class="font-mono text-red-400 text-xs">
+                {{ format(store.getLoanMonthlyPayment(loan)) }}/mo
+              </span>
+              <button
+                class="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
+                title="Early Payment"
+                @click.stop="openEarlyPayment(loan, $event)"
+              >⚡</button>
+            </div>
           </div>
           <ProgressBar
             :value="store.getLoanPaidCount(loan)"
-            :max="loan.termMonths"
+            :max="store.getLoanTotalPayments(loan)"
           />
           <p class="text-xs text-gray-400 mt-0.5">
-            {{ store.getLoanPaidCount(loan) }} / {{ loan.termMonths }} payments
+            {{ store.getLoanPaidCount(loan) }} / {{ store.getLoanTotalPayments(loan) }}
           </p>
         </li>
       </ul>
@@ -197,4 +225,10 @@ const freqLabels: Record<RecurringRule['frequency'], string> = {
 
   <RecurringRuleModal v-model="showRecurringModal" :edit-rule="editingRule" />
   <LoanModal v-model="showLoanModal" />
+  <LoanModal v-model="showViewLoanModal" :view-loan="viewingLoan" />
+  <EarlyPaymentModal
+    v-if="earlyPaymentTargetLoan"
+    v-model="showEarlyPaymentForLoan"
+    :loan="earlyPaymentTargetLoan"
+  />
 </template>
