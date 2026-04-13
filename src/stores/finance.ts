@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Transaction, Account, Category, Budget, RecurringRule, Loan } from '@/types'
+import type { Transaction, Account, Category, Budget, RecurringRule, Loan, EarlyPayment } from '@/types'
 import { ACCOUNTS, CATEGORIES, BUDGETS, TRANSACTIONS } from '@/data/mockData'
 import { isSameDay, calculateProjectedBalanceForDate } from '@/utils/helpers'
 import { generateOccurrences } from '@/utils/recurring'
-import { generateLoanTransactions, calculateAnnuityPayment } from '@/utils/loans'
+import { generateLoanTransactions, calculateAnnuityPayment, getLoanStateAtDate } from '@/utils/loans'
 
 export const useFinanceStore = defineStore('finance', () => {
   // State
@@ -61,9 +61,9 @@ export const useFinanceStore = defineStore('finance', () => {
     }
   }
 
-  function addLoan(loan: Omit<Loan, 'id'>) {
+  function addLoan(loanData: Omit<Loan, 'id' | 'earlyPayments'>): void {
     const id = crypto.randomUUID()
-    const newLoan: Loan = { ...loan, id }
+    const newLoan: Loan = { ...loanData, id, earlyPayments: [] }
     loans.value.push(newLoan)
     const loanTransactions = generateLoanTransactions(newLoan)
     transactions.value.push(...loanTransactions)
@@ -136,7 +136,65 @@ export const useFinanceStore = defineStore('finance', () => {
     return allTransactions.value.filter(t => isSameDay(t.date, date))
   }
 
+  function _regenerateLoanTransactions(loan: Loan): void {
+    transactions.value = transactions.value.filter(t => !t.id.startsWith(`loan-${loan.id}-`))
+    transactions.value.push(...generateLoanTransactions(loan))
+  }
+
+  function addEarlyPayment(loanId: string, payment: Omit<EarlyPayment, 'id'>): void {
+    const loan = loans.value.find(l => l.id === loanId)
+    if (!loan) return
+    const newPayment: EarlyPayment = { ...payment, id: crypto.randomUUID() }
+    loan.earlyPayments.push(newPayment)
+    _regenerateLoanTransactions(loan)
+  }
+
+  function setLoanCurrentBalance(loanId: string, date: Date, balance: number): void {
+    const loan = loans.value.find(l => l.id === loanId)
+    if (!loan) return
+    loan.currentBalance = { date, balance }
+    _regenerateLoanTransactions(loan)
+  }
+
+  function markLoanPaidUpToDate(loanId: string): void {
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    transactions.value = transactions.value.map(t => {
+      if (
+        t.id.startsWith(`loan-${loanId}-`) &&
+        !t.id.includes('-early-') &&
+        t.date <= today &&
+        t.type === 'planned'
+      ) {
+        return { ...t, type: 'actual' as const }
+      }
+      return t
+    })
+  }
+
+  function getLoanTransactions(loanId: string): Transaction[] {
+    return transactions.value
+      .filter(t => t.id.startsWith(`loan-${loanId}-`))
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+  }
+
+  function getLoanTotalPayments(loan: Loan): number {
+    return transactions.value.filter(
+      t => t.id.startsWith(`loan-${loan.id}-`) && !t.id.includes('-early-'),
+    ).length
+  }
+
   function getLoanMonthlyPayment(loan: Loan): number {
+    if (loan.currentBalance) {
+      const endDate = new Date(loan.startDate)
+      endDate.setMonth(endDate.getMonth() + loan.termMonths)
+      const remainingTerm = Math.max(
+        1,
+        (endDate.getFullYear() - loan.currentBalance.date.getFullYear()) * 12 +
+          (endDate.getMonth() - loan.currentBalance.date.getMonth()),
+      )
+      return calculateAnnuityPayment(loan.currentBalance.balance, loan.annualRate, remainingTerm)
+    }
     return calculateAnnuityPayment(loan.principal, loan.annualRate, loan.termMonths)
   }
 
@@ -165,6 +223,11 @@ export const useFinanceStore = defineStore('finance', () => {
     addLoan,
     removeLoan,
     addBalanceAdjustment,
+    addEarlyPayment,
+    setLoanCurrentBalance,
+    markLoanPaidUpToDate,
+    getLoanTransactions,
+    getLoanTotalPayments,
     allTransactions,
     totalBalance,
     monthTransactions,
