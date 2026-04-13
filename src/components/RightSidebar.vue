@@ -1,12 +1,25 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
-import { getMonthName, classNames } from '@/utils/helpers'
+import { useI18n } from 'vue-i18n'
+import { useCurrency } from '@/composables/useCurrency'
+import { classNames } from '@/utils/helpers'
 import AppCard from '@/components/ui/AppCard.vue'
+import BalanceInputModal from '@/components/BalanceInputModal.vue'
 
 const store = useFinanceStore()
+const { t, locale } = useI18n()
+const { format } = useCurrency()
 const activeTab = ref<'transactions' | 'budget'>('transactions')
-const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+const showBalanceModal = ref(false)
+
+function dateLabel(date: Date): string {
+  return date.toLocaleDateString(locale.value === 'ru' ? 'ru-RU' : 'en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
 </script>
 
 <template>
@@ -14,7 +27,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
     <!-- No date selected -->
     <template v-if="!store.selectedDate">
       <AppCard class="text-center text-gray-500 dark:text-gray-400">
-        Select a day to see details.
+        {{ t('selectDayPrompt') }}
       </AppCard>
     </template>
 
@@ -22,9 +35,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
     <template v-else>
       <AppCard>
         <h2 class="font-bold text-xl mb-4 text-gray-800 dark:text-gray-100">
-          {{ getMonthName(store.selectedDate.getMonth()) }}
-          {{ store.selectedDate.getDate() }},
-          {{ store.selectedDate.getFullYear() }}
+          {{ dateLabel(store.selectedDate) }}
         </h2>
 
         <!-- Tabs -->
@@ -38,7 +49,7 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
             )"
             @click="activeTab = 'transactions'"
           >
-            Transactions
+            {{ t('transactions') }}
           </button>
           <button
             :class="classNames(
@@ -49,43 +60,57 @@ const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: '
             )"
             @click="activeTab = 'budget'"
           >
-            Budget Impact
+            {{ t('budgetImpact') }}
           </button>
         </div>
 
         <!-- Transactions tab -->
         <div v-if="activeTab === 'transactions'">
           <p v-if="store.transactionsForSelectedDay.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
-            No transactions for this day.
+            {{ t('noTransactions') }}
           </p>
           <ul v-else class="space-y-3">
             <li
-              v-for="t in store.transactionsForSelectedDay"
-              :key="t.id"
+              v-for="tx in store.transactionsForSelectedDay"
+              :key="tx.id"
               class="flex items-center"
             >
               <div
-                :class="`w-2 h-2 rounded-full mr-3 ${store.categories.find(c => c.id === t.categoryId)?.color}`"
+                :class="`w-2 h-2 rounded-full mr-3 ${store.categories.find(c => c.id === tx.categoryId)?.color}`"
               />
               <div class="flex-1">
-                <p class="font-medium text-gray-800 dark:text-gray-100">{{ t.description }}</p>
+                <p class="font-medium text-gray-800 dark:text-gray-100">{{ tx.description }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ store.categories.find(c => c.id === t.categoryId)?.name }}
-                  {{ t.type === 'planned' ? '(Planned)' : '' }}
+                  {{ store.categories.find(c => c.id === tx.categoryId)?.name }}
+                  {{ tx.type === 'planned' ? `(${t('plannedLabel')})` : '' }}
                 </p>
               </div>
-              <span :class="`font-mono font-semibold ${t.amount > 0 ? 'text-green-500' : 'text-gray-700 dark:text-gray-200'}`">
-                {{ t.amount > 0 ? '+' : '' }}{{ currency.format(t.amount) }}
+              <span :class="`font-mono font-semibold ${tx.amount > 0 ? 'text-green-500' : 'text-gray-700 dark:text-gray-200'}`">
+                {{ tx.amount > 0 ? '+' : '' }}{{ format(tx.amount) }}
               </span>
             </li>
           </ul>
+
+          <!-- Set Actual Balance button -->
+          <button
+            class="mt-4 w-full py-2 rounded-lg text-sm font-medium border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            @click="showBalanceModal = true"
+          >
+            {{ t('setActualBalance') }}
+          </button>
         </div>
 
         <!-- Budget tab -->
         <div v-if="activeTab === 'budget'" class="text-sm text-gray-500 dark:text-gray-400">
-          <p>Budget impact analysis for this day will be shown here.</p>
+          <p>{{ t('budgetImpactPlaceholder') }}</p>
         </div>
       </AppCard>
     </template>
   </aside>
+
+  <BalanceInputModal
+    v-if="store.selectedDate"
+    v-model="showBalanceModal"
+    :date="store.selectedDate"
+  />
 </template>
