@@ -79,6 +79,32 @@ export default {
   preview: 'Предварительный расчёт',
   deleteLoan: 'Удалить кредит',
 
+  // Loan modal — advanced
+  alreadyPaying: 'Уже выплачиваю',
+  newLoanMode: 'Новый кредит',
+  currentBalanceAmount: 'Текущий остаток',
+  balanceDate: 'По состоянию на',
+  viewLoan: 'Кредит',
+  paymentSchedule: 'График платежей',
+  markPaidUpToToday: 'Отметить оплаченными до сегодня',
+  earlyPaymentBtn: 'Досрочный платёж',
+  remainingBalance: 'Остаток долга',
+  paymentsCount: '{paid} из {total} платежей',
+
+  // Early payment modal
+  earlyPaymentTitle: 'Досрочный платёж',
+  recalculateWhat: 'Что пересчитать?',
+  reduceTerm: 'Сократить срок',
+  reduceTermHint: 'платёж останется {payment}/мес',
+  reducePayment: 'Уменьшить платёж',
+  reducePaymentHint: 'срок останется {term} мес',
+  afterPayment: 'После платежа',
+  newMonthlyPayment: 'Новый платёж',
+  newTermMonths: 'Новый срок',
+  monthsUnit: '{n} мес',
+  addEarlyPayment: 'Добавить платёж',
+  date: 'Дата',
+
   // Balance input modal
   setActualBalanceTitle: 'Ввести фактический остаток',
   projectedBalance: 'Прогнозируемый остаток',

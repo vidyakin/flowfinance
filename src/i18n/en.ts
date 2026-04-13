@@ -79,6 +79,32 @@ export default {
   preview: 'Preview',
   deleteLoan: 'Delete Loan',
 
+  // Loan modal — advanced
+  alreadyPaying: 'Already Paying',
+  newLoanMode: 'New Loan',
+  currentBalanceAmount: 'Current Balance',
+  balanceDate: 'Balance Date',
+  viewLoan: 'Loan',
+  paymentSchedule: 'Payment Schedule',
+  markPaidUpToToday: 'Mark as Paid Up to Today',
+  earlyPaymentBtn: 'Early Payment',
+  remainingBalance: 'Remaining Balance',
+  paymentsCount: '{paid} of {total} payments',
+
+  // Early payment modal
+  earlyPaymentTitle: 'Early Payment',
+  recalculateWhat: 'What to recalculate?',
+  reduceTerm: 'Reduce Term',
+  reduceTermHint: 'payment stays {payment}/mo',
+  reducePayment: 'Reduce Payment',
+  reducePaymentHint: 'term stays {term} mo',
+  afterPayment: 'After Payment',
+  newMonthlyPayment: 'New Payment',
+  newTermMonths: 'New Term',
+  monthsUnit: '{n} mo',
+  addEarlyPayment: 'Add Payment',
+  date: 'Date',
+
   // Balance input modal
   setActualBalanceTitle: 'Set Actual Balance',
   projectedBalance: 'Projected Balance',
