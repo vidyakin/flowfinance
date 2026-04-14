@@ -81,6 +81,45 @@ export function initDb(db: Database): void {
   `)
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS loan_payments (
+      id                TEXT PRIMARY KEY,
+      loan_id           TEXT NOT NULL,
+      date              TEXT NOT NULL,
+      planned_amount    REAL,
+      actual_amount     REAL,
+      principal         REAL NOT NULL,
+      interest          REAL NOT NULL,
+      remaining_balance REAL,
+      FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE
+    )
+  `)
+
+  try { db.run('ALTER TABLE loans ADD COLUMN archived INTEGER NOT NULL DEFAULT 0') } catch (e: unknown) {
+    // Ошибка ожидаема если колонка уже существует
+    if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {
+      console.error('Migration error (ALTER TABLE loans):', e)
+    }
+  }
+
+  try { db.run('ALTER TABLE loans ADD COLUMN paid_up_to_date TEXT') } catch (e: unknown) {
+    if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {
+      console.error('Migration error (ALTER TABLE loans paid_up_to_date):', e)
+    }
+  }
+
+  try {
+    db.run('ALTER TABLE transactions ADD COLUMN recurring_rule_id TEXT')
+  } catch (e: unknown) {
+    if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {
+      console.error('Migration error (ALTER TABLE transactions recurring_rule_id):', e)
+    }
+  }
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_tx_recurring_rule ON transactions(recurring_rule_id, date)`)
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_date ON loan_payments(loan_id, date)`)
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS early_payments (
       id      TEXT PRIMARY KEY,
       loan_id TEXT NOT NULL,
@@ -90,4 +129,17 @@ export function initDb(db: Database): void {
       FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE
     )
   `)
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS daily_balances (
+      date      TEXT PRIMARY KEY,
+      balance   REAL NOT NULL
+    )
+  `)
+
+  db.run(`CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category_id)`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_recurring_rules_dates ON recurring_rules(start_date, end_date)`)
 }
