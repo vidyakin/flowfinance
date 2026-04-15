@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -19,6 +19,7 @@ const { locale } = useI18n()
 const { format } = useCurrency()
 
 const actualAmount = ref<number>(0)
+const error = ref<string | null>(null)
 
 const isOpen = computed({
   get: () => props.modelValue,
@@ -29,6 +30,7 @@ const isOpen = computed({
 watch(() => props.modelValue, (val) => {
   if (val && props.transaction) {
     actualAmount.value = Math.abs(props.transaction.amount)
+    error.value = null
   }
 })
 
@@ -40,6 +42,10 @@ const plannedAmount = computed(() =>
 
 const amountChanged = computed(() =>
   actualAmount.value !== plannedAmount.value,
+)
+
+const isAmountValid = computed(() =>
+  !isNaN(actualAmount.value) && actualAmount.value > 0,
 )
 
 const category = computed(() =>
@@ -63,14 +69,24 @@ const loading = ref(false)
 async function confirm() {
   if (!props.transaction) return
   loading.value = true
+  error.value = null
   try {
     const sign = props.transaction.amount < 0 ? -1 : 1
     await store.confirmPayment(props.transaction, sign * actualAmount.value)
     isOpen.value = false
+  } catch (e) {
+    error.value = 'Ошибка при подтверждении платежа'
   } finally {
     loading.value = false
   }
 }
+
+function handleEscape(e: KeyboardEvent) {
+  if (e.key === 'Escape' && isOpen.value) isOpen.value = false
+}
+
+onMounted(() => window.addEventListener('keydown', handleEscape))
+onUnmounted(() => window.removeEventListener('keydown', handleEscape))
 </script>
 
 <template>
@@ -114,12 +130,13 @@ async function confirm() {
 
           <!-- Amount -->
           <div class="space-y-1">
-            <label class="text-sm text-gray-400">Сумма</label>
+            <label for="confirm-amount" class="text-sm text-gray-400">Сумма</label>
             <div v-if="isLoan" class="text-lg font-mono font-bold text-gray-900 dark:text-white">
               {{ format(Math.abs(transaction.amount)) }}
             </div>
             <div v-else>
               <input
+                id="confirm-amount"
                 v-model.number="actualAmount"
                 type="number"
                 min="0"
@@ -132,6 +149,9 @@ async function confirm() {
             </div>
           </div>
 
+          <!-- Error -->
+          <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
+
           <!-- Actions -->
           <div class="flex gap-3 pt-2">
             <button
@@ -141,7 +161,7 @@ async function confirm() {
               Отмена
             </button>
             <button
-              :disabled="loading"
+              :disabled="loading || (!isLoan && !isAmountValid)"
               class="flex-1 py-2 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-1"
               @click="confirm"
             >
