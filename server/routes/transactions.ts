@@ -10,6 +10,7 @@ interface TxnRow {
   type: string
   category_id: string
   account_id: string
+  recurring_rule_id: string | null
 }
 
 function rowToTransaction(row: TxnRow): Omit<Transaction, 'date'> & { date: string } {
@@ -21,6 +22,7 @@ function rowToTransaction(row: TxnRow): Omit<Transaction, 'date'> & { date: stri
     type: row.type as Transaction['type'],
     categoryId: row.category_id,
     accountId: row.account_id,
+    ...(row.recurring_rule_id ? { recurringRuleId: row.recurring_rule_id } : {}),
   }
 }
 
@@ -40,12 +42,13 @@ export function transactionsRoutes(db: Database): Hono {
       type: string
       categoryId: string
       accountId: string
+      recurringRuleId?: string
     }>()
 
     const id = crypto.randomUUID()
     db.run(
-      'INSERT INTO transactions (id, date, description, amount, type, category_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, body.date, body.description, body.amount, body.type, body.categoryId, body.accountId],
+      'INSERT INTO transactions (id, date, description, amount, type, category_id, account_id, recurring_rule_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, body.date, body.description, body.amount, body.type, body.categoryId, body.accountId, body.recurringRuleId ?? null],
     )
 
     const created = db.query('SELECT * FROM transactions WHERE id = ?').get(id) as TxnRow
@@ -64,6 +67,7 @@ export function transactionsRoutes(db: Database): Hono {
       type: string
       categoryId: string
       accountId: string
+      recurringRuleId: string
     }>>()
 
     if (body.date !== undefined)
@@ -78,6 +82,8 @@ export function transactionsRoutes(db: Database): Hono {
       db.run('UPDATE transactions SET category_id = ? WHERE id = ?', [body.categoryId, id])
     if (body.accountId !== undefined)
       db.run('UPDATE transactions SET account_id = ? WHERE id = ?', [body.accountId, id])
+    if (body.recurringRuleId !== undefined)
+      db.run('UPDATE transactions SET recurring_rule_id = ? WHERE id = ?', [body.recurringRuleId, id])
 
     const updated = db.query('SELECT * FROM transactions WHERE id = ?').get(id) as TxnRow
     return c.json(rowToTransaction(updated))
