@@ -178,7 +178,7 @@ export const useFinanceStore = defineStore('finance', () => {
       // Кредитный платёж: ищем loanId через список кредитов
       const loan = loans.value.find(l => tx.id.startsWith(`loan-${l.id}-`))
       if (!loan) throw new Error(`Loan not found for transaction ${tx.id}`)
-      await markPaymentPaid(loan.id, tx.id)
+      await markPaymentPaid(loan.id, tx.id, actualAmount)
       return
     } else {
       // Одноразовый плановый: обновляем type→actual и сумму

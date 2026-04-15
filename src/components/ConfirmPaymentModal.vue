@@ -36,6 +36,8 @@ watch(() => props.modelValue, (val) => {
 
 const isLoan = computed(() => props.transaction?.id.startsWith('loan-') ?? false)
 
+const isAlreadyPaid = computed(() => isLoan.value && props.transaction?.type === 'actual')
+
 const plannedAmount = computed(() =>
   props.transaction ? Math.abs(props.transaction.amount) : 0,
 )
@@ -152,6 +154,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
           <!-- Error -->
           <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
 
+          <!-- Already paid -->
+          <p v-if="isAlreadyPaid" class="text-sm text-green-500">✓ Уже оплачено</p>
+
           <!-- Actions -->
           <div class="flex gap-3 pt-2">
             <button
@@ -161,7 +166,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
               Отмена
             </button>
             <button
-              :disabled="loading || (!isLoan && !isAmountValid)"
+              :disabled="loading || (!isLoan && !isAmountValid) || isAlreadyPaid"
               class="flex-1 py-2 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-1"
               @click="confirm"
             >

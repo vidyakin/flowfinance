@@ -7,9 +7,8 @@ import { classNames } from '@/utils/helpers'
 import AppCard from '@/components/ui/AppCard.vue'
 import BalanceInputModal from '@/components/BalanceInputModal.vue'
 import TransactionModal from '@/components/TransactionModal.vue'
-import RecurringRuleModal from '@/components/RecurringRuleModal.vue'
 import ConfirmPaymentModal from '@/components/ConfirmPaymentModal.vue'
-import type { Transaction, RecurringRule } from '@/types'
+import type { Transaction } from '@/types'
 
 const store = useFinanceStore()
 const { t, locale } = useI18n()
@@ -18,8 +17,6 @@ const activeTab = ref<'transactions' | 'budget'>('transactions')
 const showBalanceModal = ref(false)
 const showTransactionModal = ref(false)
 const editingTransaction = ref<Transaction | undefined>(undefined)
-const showRecurringModal = ref(false)
-const editingRule = ref<RecurringRule | undefined>(undefined)
 const searchQuery = ref('')
 const showConfirmModal = ref(false)
 const confirmingTransaction = ref<Transaction | null>(null)
@@ -43,7 +40,7 @@ function dateLabel(date: Date): string {
 }
 
 function editTransaction(tx: Transaction) {
-  if (tx.type === 'planned' || tx.id.startsWith('recurring-')) {
+  if (tx.type === 'planned' || tx.id.startsWith('recurring-') || tx.id.startsWith('loan-')) {
     confirmingTransaction.value = tx
     showConfirmModal.value = true
   } else {
@@ -153,7 +150,6 @@ function editTransaction(tx: Transaction) {
     :date="store.selectedDate"
   />
   <TransactionModal v-model="showTransactionModal" :transaction="editingTransaction" />
-  <RecurringRuleModal v-model="showRecurringModal" :edit-rule="editingRule" />
   <ConfirmPaymentModal
     v-model="showConfirmModal"
     :transaction="confirmingTransaction"
