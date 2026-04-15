@@ -1,17 +1,38 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { classNames } from '@/utils/helpers'
 import AppCard from '@/components/ui/AppCard.vue'
 import BalanceInputModal from '@/components/BalanceInputModal.vue'
+import TransactionModal from '@/components/TransactionModal.vue'
+import RecurringRuleModal from '@/components/RecurringRuleModal.vue'
+import ConfirmPaymentModal from '@/components/ConfirmPaymentModal.vue'
+import type { Transaction, RecurringRule } from '@/types'
 
 const store = useFinanceStore()
 const { t, locale } = useI18n()
 const { format } = useCurrency()
 const activeTab = ref<'transactions' | 'budget'>('transactions')
 const showBalanceModal = ref(false)
+const showTransactionModal = ref(false)
+const editingTransaction = ref<Transaction | undefined>(undefined)
+const showRecurringModal = ref(false)
+const editingRule = ref<RecurringRule | undefined>(undefined)
+const searchQuery = ref('')
+const showConfirmModal = ref(false)
+const confirmingTransaction = ref<Transaction | null>(null)
+
+const filteredTransactions = computed(() => {
+  const txns = store.transactionsForSelectedDay
+  if (!searchQuery.value.trim()) return txns
+  const q = searchQuery.value.toLowerCase()
+  return txns.filter(t =>
+    t.description?.toLowerCase().includes(q) ||
+    String(Math.abs(t.amount)).includes(q),
+  )
+})
 
 function dateLabel(date: Date): string {
   return date.toLocaleDateString(locale.value === 'ru' ? 'ru-RU' : 'en-US', {
@@ -20,10 +41,20 @@ function dateLabel(date: Date): string {
     year: 'numeric',
   })
 }
+
+function editTransaction(tx: Transaction) {
+  if (tx.type === 'planned' || tx.id.startsWith('recurring-')) {
+    confirmingTransaction.value = tx
+    showConfirmModal.value = true
+  } else {
+    editingTransaction.value = tx
+    showTransactionModal.value = true
+  }
+}
 </script>
 
 <template>
-  <aside class="w-[350px] fixed top-16 right-0 h-[calc(100vh-4rem)] p-4 space-y-4 overflow-y-auto">
+  <aside class="w-full lg:w-[350px] lg:fixed lg:top-16 lg:right-0 lg:h-[calc(100vh-4rem)] p-4 space-y-4 overflow-y-auto">
     <!-- No date selected -->
     <template v-if="!store.selectedDate">
       <AppCard class="text-center text-gray-500 dark:text-gray-400">
@@ -66,14 +97,22 @@ function dateLabel(date: Date): string {
 
         <!-- Transactions tab -->
         <div v-if="activeTab === 'transactions'">
-          <p v-if="store.transactionsForSelectedDay.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
-            {{ t('noTransactions') }}
+          <input
+            v-if="store.transactionsForSelectedDay.length > 0"
+            v-model="searchQuery"
+            type="text"
+            placeholder="Поиск..."
+            class="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 mb-2"
+          />
+          <p v-if="filteredTransactions.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+            {{ store.transactionsForSelectedDay.length === 0 ? t('noTransactions') : 'Ничего не найдено' }}
           </p>
           <ul v-else class="space-y-3">
             <li
-              v-for="tx in store.transactionsForSelectedDay"
+              v-for="tx in filteredTransactions"
               :key="tx.id"
-              class="flex items-center"
+              class="flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg px-2 py-1 -mx-2"
+              @click="editTransaction(tx)"
             >
               <div
                 :class="`w-2 h-2 rounded-full mr-3 ${store.categories.find(c => c.id === tx.categoryId)?.color}`"
@@ -112,5 +151,11 @@ function dateLabel(date: Date): string {
     v-if="store.selectedDate"
     v-model="showBalanceModal"
     :date="store.selectedDate"
+  />
+  <TransactionModal v-model="showTransactionModal" :transaction="editingTransaction" />
+  <RecurringRuleModal v-model="showRecurringModal" :edit-rule="editingRule" />
+  <ConfirmPaymentModal
+    v-model="showConfirmModal"
+    :transaction="confirmingTransaction"
   />
 </template>
