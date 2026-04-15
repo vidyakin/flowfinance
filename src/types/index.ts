@@ -23,6 +23,7 @@ export interface Transaction {
   type: TransactionType
   categoryId: string
   accountId: string
+  recurringRuleId?: string
 }
 
 export interface Budget {
@@ -49,6 +50,17 @@ export interface EarlyPayment {
   mode: 'reduce_term' | 'reduce_payment'
 }
 
+export interface LoanPayment {
+  id: string
+  loanId: string
+  date: Date
+  plannedAmount: number | null   // null для досрочных платежей
+  actualAmount: number | null    // null для будущих плановых
+  principal: number
+  interest: number
+  remainingBalance: number | null // null для будущих плановых; снимок для оплаченных
+}
+
 export interface Loan {
   id: string
   name: string
@@ -65,4 +77,5 @@ export interface Loan {
   earlyPayments: EarlyPayment[]
   insurancePerMonth?: number
   paymentDay?: number
+  archived?: boolean
 }
