@@ -467,6 +467,7 @@ export const useFinanceStore = defineStore('finance', () => {
     loans,
     loading,
     isLoading,
+    dailyBalances,
     loadInitialData,
     prevMonth,
     nextMonth,
