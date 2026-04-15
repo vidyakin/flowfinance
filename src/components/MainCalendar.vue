@@ -8,6 +8,7 @@ import { useProjectedBalance } from '@/composables/useProjectedBalance'
 import PlusIcon from '@/components/icons/PlusIcon.vue'
 import RepeatIcon from '@/components/icons/RepeatIcon.vue'
 import RecurringRuleModal from '@/components/RecurringRuleModal.vue'
+import TransactionModal from '@/components/TransactionModal.vue'
 import type { Transaction } from '@/types'
 
 const store = useFinanceStore()
@@ -17,26 +18,40 @@ const { format } = useCurrency()
 
 const draggedTransactionId = ref<string | null>(null)
 const showRecurringModal = ref(false)
+const showTransactionModal = ref(false)
+const transactionDate = ref<Date | undefined>(undefined)
 
 const year = computed(() => store.currentDate.getFullYear())
 const month = computed(() => store.currentDate.getMonth())
-const firstDayOfMonth = computed(() => new Date(year.value, month.value, 1).getDay())
+const firstDayOfMonth = computed(() => {
+  const day = new Date(year.value, month.value, 1).getDay()
+  return (day + 6) % 7
+})
 const daysInMonth = computed(() => new Date(year.value, month.value + 1, 0).getDate())
 
 const weekdays = computed(() => {
   const fmt = new Intl.DateTimeFormat(locale.value === 'ru' ? 'ru-RU' : 'en-US', { weekday: 'short' })
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(2024, 0, i)
+    const d = new Date(2024, 0, 1 + i)
     return fmt.format(d)
   })
 })
 
 const gridStyle = computed(() => ({
-  gridTemplateRows: `auto repeat(${Math.ceil((daysInMonth.value + firstDayOfMonth.value) / 7)}, minmax(120px, 1fr))`,
+  gridTemplateRows: `auto repeat(${Math.ceil((daysInMonth.value + firstDayOfMonth.value) / 7)}, minmax(100px, 1fr))`,
 }))
 
 function getDayDate(day: number): Date {
   return new Date(year.value, month.value, day)
+}
+
+function handleDayClick(day: number, event: MouseEvent) {
+  if (event.detail === 2) {
+    transactionDate.value = getDayDate(day)
+    showTransactionModal.value = true
+  } else {
+    store.selectDate(getDayDate(day))
+  }
 }
 
 function handleDragStart(e: DragEvent, transactionId: string) {
@@ -58,10 +73,14 @@ function handleDragOver(e: DragEvent) {
 function getCategoryColor(transaction: Transaction): string {
   return store.categories.find(c => c.id === transaction.categoryId)?.color ?? 'bg-gray-400'
 }
+
+function isConfirmed(tx: Transaction): boolean {
+  return tx.type === 'actual' && (!!tx.recurringRuleId || tx.id.startsWith('loan-'))
+}
 </script>
 
 <template>
-  <main class="flex-1 overflow-y-auto p-4">
+  <main class="flex-shrink-0 p-4">
     <!-- Control Bar -->
     <div class="flex items-center justify-between mb-4">
       <div class="flex items-center bg-gray-200/50 dark:bg-gray-700/50 p-1 rounded-lg text-sm font-medium">
@@ -77,7 +96,10 @@ function getCategoryColor(transaction: Transaction): string {
           <RepeatIcon class="w-4 h-4 mr-1" />
           {{ t('addRecurring') }}
         </button>
-        <button class="flex items-center bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-600 transition-colors">
+        <button
+          class="flex items-center bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-600 transition-colors"
+          @click="showTransactionModal = true"
+        >
           <PlusIcon class="w-5 h-5 mr-1" />
           {{ t('addTransaction') }}
         </button>
@@ -109,12 +131,12 @@ function getCategoryColor(transaction: Transaction): string {
       <div
         v-for="day in daysInMonth"
         :key="day"
-        class="relative border-t border-r border-gray-200 dark:border-gray-700 p-2 min-h-[120px] flex flex-col transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
-        @click="store.selectDate(getDayDate(day))"
+        class="relative border-t border-r border-gray-200 dark:border-gray-700 p-2 flex flex-col transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+        @click="handleDayClick(day, $event)"
         @drop="handleDrop($event, getDayDate(day))"
         @dragover="handleDragOver"
       >
-        <div class="flex justify-between items-center">
+        <div class="flex items-center">
           <span
             :class="classNames(
               'text-sm font-medium',
@@ -125,35 +147,40 @@ function getCategoryColor(transaction: Transaction): string {
           >
             {{ day }}
           </span>
-          <span :class="`font-mono text-xs font-bold ${balanceClassForDate(getDayDate(day))}`">
-            {{ format(store.getProjectedBalanceForDate(getDayDate(day))) }}
-          </span>
         </div>
 
         <div class="flex-1 mt-1 overflow-hidden">
           <div
-            v-for="tx in store.getTransactionsForDate(getDayDate(day)).slice(0, 2)"
+            v-for="tx in store.getTransactionsForDate(getDayDate(day)).slice(0, 3)"
             :key="tx.id"
             :class="classNames(
-              'text-xs text-white rounded px-1.5 py-0.5 mb-1 cursor-grab active:cursor-grabbing truncate',
+              'text-xs text-white rounded px-1.5 py-0.5 mb-1 cursor-grab active:cursor-grabbing truncate flex items-center gap-1',
               getCategoryColor(tx),
               tx.type === 'planned' ? 'opacity-60 border border-dashed border-white/50' : '',
             )"
             :draggable="!tx.id.startsWith('recurring-')"
             @dragstart="!tx.id.startsWith('recurring-') && handleDragStart($event, tx.id)"
           >
-            {{ tx.description }}
+            <span v-if="isConfirmed(tx)" class="flex-shrink-0">✓</span>
+            <span class="truncate">{{ tx.description }}</span>
           </div>
           <p
-            v-if="store.getTransactionsForDate(getDayDate(day)).length > 2"
+            v-if="store.getTransactionsForDate(getDayDate(day)).length > 3"
             class="text-xs text-gray-500 dark:text-gray-400 mt-1"
           >
-            +{{ store.getTransactionsForDate(getDayDate(day)).length - 2 }} more
+            +{{ store.getTransactionsForDate(getDayDate(day)).length - 3 }} more
           </p>
+        </div>
+
+        <div class="mt-auto pt-0.5">
+          <span :class="`font-mono text-xs font-bold ${balanceClassForDate(getDayDate(day))}`">
+            {{ format(store.getProjectedBalanceForDate(getDayDate(day))) }}
+          </span>
         </div>
       </div>
     </div>
   </main>
 
   <RecurringRuleModal v-model="showRecurringModal" />
+  <TransactionModal v-model="showTransactionModal" :date="transactionDate" />
 </template>
