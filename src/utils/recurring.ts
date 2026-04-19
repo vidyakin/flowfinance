@@ -17,10 +17,10 @@ export function generateOccurrences(rule: RecurringRule, from: Date, to: Date): 
   while (cursor <= to) {
     if (end && cursor > end) break
 
-    const dateKey = cursor.toISOString().slice(0, 10)
+    const dateStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`
     result.push({
-      id: `recurring-${rule.id}-${dateKey}`,
-      date: new Date(cursor),
+      id: `recurring-${rule.id}-${dateStr}`,
+      date: new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()),
       description: rule.name,
       amount: rule.amount,
       type: 'planned',

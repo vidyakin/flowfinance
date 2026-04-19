@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -29,6 +29,12 @@ const canSave = computed(() => adjustment.value !== null && adjustment.value !==
 function close() {
   emit('update:modelValue', false)
 }
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') close()
+}
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 function save() {
   if (!canSave.value || actualBalance.value === null) return

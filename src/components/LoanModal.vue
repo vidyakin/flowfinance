@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, watchEffect, onMounted, onUnmounted } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
@@ -25,6 +25,19 @@ const annualRate = ref(0)
 const termMonths = ref(12)
 const startDate = ref(today)
 const accountId = ref(store.accounts[0]?.id ?? '')
+watchEffect(() => {
+  if (!accountId.value && store.accounts.length > 0) {
+    accountId.value = store.accounts[0].id
+  }
+})
+const loanCategoryId = computed(() => {
+  const cats = store.categories
+  return (
+    cats.find(c => /кредит|loan/i.test(c.name))?.id ??
+    cats.find(c => c.type === 'expense')?.id ??
+    ''
+  )
+})
 const currentBalanceAmount = ref(0)
 const currentBalanceDate = ref(today)
 const insurancePerMonth = ref(0)
@@ -66,12 +79,30 @@ const isValid = computed(() => {
   return principal.value > 0
 })
 
+// ── Escape key ───────────────────────────────────────────────────────
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') close()
+}
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
+
+// ── Delete confirmation ───────────────────────────────────────────────
+const showDeleteConfirm = ref(false)
+
+async function handleDelete() {
+  if (!props.viewLoan) return
+  showDeleteConfirm.value = false
+  await store.removeLoan(props.viewLoan.id)
+  close()
+}
+
 // ── View mode state ──────────────────────────────────────────────────
 const showEarlyPaymentModal = ref(false)
+const markingPaymentId = ref<string | null>(null)
 
-const loanTransactions = computed(() => {
+const loanPayments = computed(() => {
   if (!props.viewLoan) return []
-  return store.getLoanTransactions(props.viewLoan.id)
+  return store.loanPayments[props.viewLoan.id] ?? []
 })
 
 const paidCount = computed(() => {
@@ -84,7 +115,18 @@ const totalCount = computed(() => {
   return store.getLoanTotalPayments(props.viewLoan)
 })
 
+const remainingBalance = computed(() => {
+  if (!props.viewLoan) return null
+  return store.getLoanRemainingBalance(props.viewLoan.id)
+})
+
 // ── Watchers ─────────────────────────────────────────────────────────
+watch(() => props.modelValue, async (newVal) => {
+  if (newVal && props.viewLoan) {
+    await store.loadLoanPayments(props.viewLoan.id)
+  }
+})
+
 // Reset create mode state when modal closes
 watch(() => props.modelValue, (newVal) => {
   if (!newVal && !isViewMode.value) {
@@ -107,6 +149,11 @@ function close() {
   emit('update:modelValue', false)
 }
 
+function toLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 function submit() {
   if (!isValid.value) return
   if (alreadyPaying.value) {
@@ -114,12 +161,12 @@ function submit() {
       name: name.value.trim(),
       principal: currentBalanceAmount.value,
       annualRate: annualRate.value,
-      startDate: new Date(startDate.value),
+      startDate: toLocalDate(startDate.value),
       termMonths: termMonths.value,
       accountId: accountId.value,
-      categoryId: 'cat6',
+      categoryId: loanCategoryId.value,
       currentBalance: {
-        date: new Date(currentBalanceDate.value),
+        date: toLocalDate(currentBalanceDate.value),
         balance: currentBalanceAmount.value,
       },
       paymentDay: paymentDay.value,
@@ -130,10 +177,10 @@ function submit() {
       name: name.value.trim(),
       principal: principal.value,
       annualRate: annualRate.value,
-      startDate: new Date(startDate.value),
+      startDate: toLocalDate(startDate.value),
       termMonths: termMonths.value,
       accountId: accountId.value,
-      categoryId: 'cat6',
+      categoryId: loanCategoryId.value,
       paymentDay: paymentDay.value,
       ...(insurancePerMonth.value > 0 && { insurancePerMonth: insurancePerMonth.value }),
     })
@@ -141,15 +188,25 @@ function submit() {
   close()
 }
 
-function deleteLoan() {
+
+async function markPaid() {
   if (!props.viewLoan) return
-  store.removeLoan(props.viewLoan.id)
-  close()
+  try {
+    await store.markLoanPaidUpToDate(props.viewLoan.id)
+    await store.loadLoanPayments(props.viewLoan.id)
+  } catch (e) {
+    console.error('markLoanPaidUpToDate failed:', e)
+  }
 }
 
-function markPaid() {
-  if (!props.viewLoan) return
-  store.markLoanPaidUpToDate(props.viewLoan.id)
+async function markSinglePaid(paymentId: string) {
+  if (!props.viewLoan || markingPaymentId.value) return
+  markingPaymentId.value = paymentId
+  try {
+    await store.markPaymentPaid(props.viewLoan.id, paymentId)
+  } finally {
+    markingPaymentId.value = null
+  }
 }
 </script>
 
@@ -160,7 +217,7 @@ function markPaid() {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       @click.self="close"
     >
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-[484px] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-[540px] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
 
         <!-- ── VIEW MODE ─────────────────────────────────────────── -->
         <template v-if="isViewMode && viewLoan">
@@ -204,34 +261,97 @@ function markPaid() {
             >{{ t('earlyPaymentBtn') }}</button>
           </div>
 
-          <!-- Payment schedule -->
+          <!-- Remaining balance -->
+          <div v-if="remainingBalance !== null" class="flex justify-between text-sm text-gray-700 dark:text-gray-300 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg px-3 py-2">
+            <span>{{ t('remainingDebt') }}:</span>
+            <span class="font-mono font-semibold text-yellow-700 dark:text-yellow-300">{{ format(remainingBalance) }}</span>
+          </div>
+
+          <!-- Payment schedule table -->
           <div>
             <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">{{ t('paymentSchedule') }}</h3>
-            <div class="space-y-1 max-h-64 overflow-y-auto pr-1">
-              <div
-                v-for="tx in loanTransactions"
-                :key="tx.id"
-                class="flex justify-between items-center text-xs px-2 py-1.5 rounded-lg"
-                :class="tx.type === 'actual'
-                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                  : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300'"
-              >
-                <span>{{ tx.date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) }}</span>
-                <span class="font-mono">
-                  <template v-if="tx.id.includes('-early-')">⚡ </template>
-                  {{ format(Math.abs(tx.amount)) }}
-                  <span v-if="tx.type === 'actual'" class="ml-1 opacity-60">✓</span>
-                </span>
-              </div>
-              <p v-if="loanTransactions.length === 0" class="text-xs text-gray-400 text-center py-4">—</p>
+            <div class="max-h-72 overflow-y-auto">
+              <table class="w-full text-xs">
+                <thead class="sticky top-0 bg-white dark:bg-gray-800">
+                  <tr class="text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-700">
+                    <th class="text-left py-1 font-medium">{{ t('date') }}</th>
+                    <th class="text-right py-1 font-medium">{{ t('planned') }}</th>
+                    <th class="text-right py-1 font-medium">{{ t('actual') }}</th>
+                    <th class="text-right py-1 font-medium">{{ t('balance') }}</th>
+                    <th class="w-6"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="p in loanPayments"
+                    :key="p.id"
+                    :class="[
+                      'border-b border-gray-50 dark:border-gray-700/50',
+                      p.actualAmount !== null
+                        ? 'text-green-700 dark:text-green-400'
+                        : 'text-gray-600 dark:text-gray-300',
+                      p.plannedAmount === null ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
+                    ]"
+                  >
+                    <td class="py-1 pr-2 whitespace-nowrap">
+                      <span v-if="p.plannedAmount === null" class="mr-1 text-blue-400">⚡</span>
+                      {{ p.date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' }) }}
+                    </td>
+                    <td class="text-right py-1 pr-2 font-mono">
+                      <template v-if="p.plannedAmount !== null">
+                        {{ format((p.plannedAmount) + (viewLoan.insurancePerMonth ?? 0)) }}
+                        <div v-if="viewLoan.insurancePerMonth" class="text-gray-400 dark:text-gray-500 text-[10px]">
+                          {{ format(p.plannedAmount) }}+{{ format(viewLoan.insurancePerMonth) }}
+                        </div>
+                      </template>
+                      <template v-else>—</template>
+                    </td>
+                    <td class="text-right py-1 pr-2 font-mono">
+                      <template v-if="p.actualAmount !== null">
+                        {{ format(p.actualAmount + (p.plannedAmount !== null ? (viewLoan.insurancePerMonth ?? 0) : 0)) }} ✓
+                      </template>
+                      <template v-else>—</template>
+                    </td>
+                    <td class="text-right py-1 font-mono">
+                      <template v-if="p.remainingBalance !== null">
+                        {{ format(p.remainingBalance) }}
+                      </template>
+                      <template v-else>—</template>
+                    </td>
+                    <td class="pl-1">
+                      <button
+                        v-if="p.actualAmount === null && p.plannedAmount !== null"
+                        class="text-gray-300 hover:text-green-500 dark:text-gray-600 dark:hover:text-green-400 transition-colors"
+                        :disabled="markingPaymentId === p.id"
+                        title="Отметить оплаченным"
+                        @click="markSinglePaid(p.id)"
+                      >✓</button>
+                    </td>
+                  </tr>
+                  <tr v-if="loanPayments.length === 0">
+                    <td colspan="5" class="text-center py-4 text-gray-400">—</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
           <!-- Delete -->
           <button
             class="w-full py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            @click="deleteLoan"
+            @click="showDeleteConfirm = true"
           >{{ t('deleteLoan') }}</button>
+
+          <!-- Delete confirmation overlay -->
+          <div v-if="showDeleteConfirm" class="absolute inset-0 bg-black/50 flex items-center justify-center z-10 rounded-xl">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+              <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">Удалить кредит и все связанные транзакции?</p>
+              <div class="flex gap-3 justify-end">
+                <button @click="showDeleteConfirm = false" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Отмена</button>
+                <button @click="handleDelete" class="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600">Удалить</button>
+              </div>
+            </div>
+          </div>
         </template>
 
         <!-- ── CREATE MODE ───────────────────────────────────────── -->
@@ -333,7 +453,7 @@ function markPaid() {
                 v-model.number="paymentDay"
                 type="number"
                 min="1"
-                max="28"
+                max="31"
                 class="w-full px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

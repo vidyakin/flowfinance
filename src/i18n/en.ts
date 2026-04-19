@@ -19,6 +19,10 @@ export default {
   plan: 'Plan',
   combined: 'Combined',
   addTransaction: 'Add Transaction',
+  newTransaction: 'New Transaction',
+  editTransaction: 'Edit Transaction',
+  income: 'Income',
+  expense: 'Expense',
   moreItems: '+{n} more',
 
   // Right sidebar
@@ -52,7 +56,10 @@ export default {
   endDate: 'End Date',
   cancel: 'Cancel',
   save: 'Save',
+  delete: 'Delete',
   create: 'Create',
+  description: 'Description',
+  type: 'Type',
 
   // Recurring modal
   newRecurring: 'New Recurring Rule',
@@ -92,7 +99,10 @@ export default {
   markPaidUpToToday: 'Mark as Paid Up to Today',
   earlyPaymentBtn: 'Early Payment',
   remainingBalance: 'Remaining Balance',
+  remainingDebt: 'Remaining Debt',
   paymentsCount: '{paid} of {total} payments',
+  planned: 'Planned',
+  balance: 'Balance',
 
   // Early payment modal
   earlyPaymentTitle: 'Early Payment',
@@ -106,11 +116,11 @@ export default {
   newTermMonths: 'New Term',
   monthsUnit: '{n} mo',
   addEarlyPayment: 'Add Payment',
-  date: 'Date',
 
   // Balance input modal
   setActualBalanceTitle: 'Set Actual Balance',
   projectedBalance: 'Projected Balance',
   actualBalance: 'Actual Balance',
   adjustment: 'Adjustment',
+  date: 'Date',
 }

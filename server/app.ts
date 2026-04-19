@@ -7,6 +7,8 @@ import { budgetsRoutes } from './routes/budgets'
 import { transactionsRoutes } from './routes/transactions'
 import { recurringRoutes } from './routes/recurring'
 import { loansRoutes } from './routes/loans'
+import { balancesRoutes } from './routes/balances'
+import { exportRoutes } from './routes/export'
 
 export function createApp(db: Database): Hono {
   const app = new Hono()
@@ -19,6 +21,8 @@ export function createApp(db: Database): Hono {
   app.route('/api/transactions', transactionsRoutes(db))
   app.route('/api/recurring', recurringRoutes(db))
   app.route('/api/loans', loansRoutes(db))
+  app.route('/api/balances', balancesRoutes(db))
+  app.route('/api/export', exportRoutes(db))
 
   return app
 }

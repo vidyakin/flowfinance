@@ -27,3 +27,5 @@ dist-ssr
 data/flowfinance.db
 data/flowfinance.db-shm
 data/flowfinance.db-wal
+
+graphify-out

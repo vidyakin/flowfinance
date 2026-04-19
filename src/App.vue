@@ -13,15 +13,15 @@ onMounted(() => store.loadInitialData())
 </script>
 
 <template>
-  <div class="h-screen w-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
+  <div class="min-h-screen w-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
     <AppHeader />
-    <div class="flex flex-1 pt-16">
+    <div class="flex flex-col lg:flex-row flex-1 pt-16 overflow-hidden">
       <LeftSidebar />
-      <div class="flex-1 ml-[300px] mr-[350px] overflow-hidden">
+      <div class="flex-1 min-w-0 lg:ml-[300px] lg:mr-[350px] flex flex-col overflow-hidden">
         <MainCalendar />
+        <AnalyticsPanel />
       </div>
       <RightSidebar />
-      <AnalyticsPanel />
     </div>
     <SettingsModal />
   </div>

@@ -19,6 +19,10 @@ export default {
   plan: 'План',
   combined: 'Все',
   addTransaction: 'Добавить транзакцию',
+  newTransaction: 'Новая транзакция',
+  editTransaction: 'Редактировать',
+  income: 'Приход',
+  expense: 'Расход',
   moreItems: '+{n} ещё',
 
   // Right sidebar
@@ -52,7 +56,10 @@ export default {
   endDate: 'Дата окончания',
   cancel: 'Отмена',
   save: 'Сохранить',
+  delete: 'Удалить',
   create: 'Создать',
+  description: 'Описание',
+  type: 'Тип',
 
   // Recurring modal
   newRecurring: 'Новое регулярное правило',
@@ -92,7 +99,10 @@ export default {
   markPaidUpToToday: 'Отметить оплаченными до сегодня',
   earlyPaymentBtn: 'Досрочный платёж',
   remainingBalance: 'Остаток долга',
+  remainingDebt: 'Остаток долга',
   paymentsCount: '{paid} из {total} платежей',
+  planned: 'План',
+  balance: 'Остаток',
 
   // Early payment modal
   earlyPaymentTitle: 'Досрочный платёж',
@@ -106,11 +116,11 @@ export default {
   newTermMonths: 'Новый срок',
   monthsUnit: '{n} мес',
   addEarlyPayment: 'Добавить платёж',
-  date: 'Дата',
 
   // Balance input modal
   setActualBalanceTitle: 'Ввести фактический остаток',
   projectedBalance: 'Прогнозируемый остаток',
   actualBalance: 'Фактический остаток',
   adjustment: 'Корректировка',
+  date: 'Дата',
 }

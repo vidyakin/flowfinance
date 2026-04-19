@@ -1,4 +1,5 @@
-import type { Loan, Transaction } from '@/types'
+import type { Loan } from '@/types'
+import dayjs from 'dayjs'
 
 const MAX_LOAN_MONTHS = 600 // 50 years safety cap
 
@@ -128,73 +129,140 @@ export function getLoanStateAtDate(
   return { balance: Math.max(0, balance), monthlyPayment, remainingTerm: term }
 }
 
-export function generateLoanTransactions(loan: Loan): Transaction[] {
+export interface AmortizationRow {
+  id: string
+  date: Date
+  plannedAmount: number  // principal + interest, без страховки
+  principal: number
+  interest: number
+  balanceBefore: number
+  balanceAfter: number
+}
+
+/**
+ * Генерирует строки графика платежей с разбивкой на тело/проценты и остатки.
+ * Досрочные погашения влияют на последующий график, но сами строками не включаются.
+ *
+ * Если задан currentBalance — генерирует полный график начиная с первого платежа
+ * (paymentDay после startDate), включая исторические строки (до currentBalance.date),
+ * рассчитанные через обратную амортизацию от известного текущего остатка.
+ */
+export function generateAmortizationRows(loan: Loan): AmortizationRow[] {
   const r = loan.annualRate / 100 / 12
 
-  // Determine starting point
+  // Параметры будущего сегмента (после currentBalance.date или с firstPaymentDate)
+  let firstPaymentDate: Date  // первый платёж с даты startDate (для исторического раздела)
   let segmentDate: Date
   let segmentBalance: number
   let segmentTerm: number
 
   if (loan.currentBalance) {
-    segmentDate = new Date(loan.currentBalance.date)
+    const cbDate = new Date(loan.currentBalance.date)
     segmentBalance = loan.currentBalance.balance
     const endDate = new Date(loan.startDate)
     endDate.setMonth(endDate.getMonth() + loan.termMonths)
-    segmentTerm = Math.max(1, monthsBetween(segmentDate, endDate))
-    if (loan.paymentDay) segmentDate = applyPaymentDay(segmentDate, loan.paymentDay)
+    segmentTerm = Math.max(1, monthsBetween(cbDate, endDate))
+    segmentDate = loan.paymentDay ? applyPaymentDay(cbDate, loan.paymentDay) : addOneMonth(cbDate)
+
+    // Первый платёж от startDate (для генерации исторических строк)
+    firstPaymentDate = loan.paymentDay
+      ? applyPaymentDay(new Date(loan.startDate), loan.paymentDay)
+      : addOneMonth(new Date(loan.startDate))
   } else {
-    segmentDate = new Date(loan.startDate)
+    // Без currentBalance: поведение не меняем — первый платёж в том же месяце, что startDate
+    const sd = new Date(loan.startDate)
+    if (loan.paymentDay) {
+      const d = Math.min(loan.paymentDay, new Date(sd.getFullYear(), sd.getMonth() + 1, 0).getDate())
+      segmentDate = new Date(sd.getFullYear(), sd.getMonth(), d)
+    } else {
+      segmentDate = sd
+    }
+    firstPaymentDate = segmentDate
     segmentBalance = loan.principal
     segmentTerm = loan.termMonths
-    if (loan.paymentDay) {
-      const d = Math.min(loan.paymentDay, new Date(segmentDate.getFullYear(), segmentDate.getMonth() + 1, 0).getDate())
-      segmentDate = new Date(segmentDate.getFullYear(), segmentDate.getMonth(), d)
+  }
+
+  // Ранние погашения: учитываем только те, что после начала будущего сегмента
+  const futureSegmentStart = loan.currentBalance ? new Date(loan.currentBalance.date) : firstPaymentDate
+  const sortedEarlyPayments = [...loan.earlyPayments]
+    .filter(ep => new Date(ep.date) >= futureSegmentStart)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  const rows: AmortizationRow[] = []
+  let monthlyPayment = calculateAnnuityPayment(segmentBalance, loan.annualRate, segmentTerm)
+
+  // ── Исторические строки (только при наличии currentBalance) ──────────────
+  // Используют неймспейс "hist-N" чтобы не конфликтовать с существующими
+  // оплаченными будущими платежами (у которых IDs = loan-{id}-0, loan-{id}-1, …).
+  if (loan.currentBalance) {
+    const cbDate = new Date(loan.currentBalance.date)
+
+    if (firstPaymentDate < cbDate) {
+      // Собираем даты исторических платежей
+      const historicalDates: Date[] = []
+      let d = new Date(firstPaymentDate)
+      while (d < cbDate) {
+        historicalDates.push(new Date(d))
+        d = addOneMonth(d)
+      }
+
+      // Восстанавливаем исторические балансы через обратную амортизацию.
+      // Знаем баланс на cbDate = segmentBalance; движемся назад:
+      //   balance_prev = (balance + monthlyPayment) / (1 + r)
+      const balancesBeforePayment: number[] = []
+      let bal = segmentBalance
+      for (let i = historicalDates.length - 1; i >= 0; i--) {
+        const balBefore = (bal + monthlyPayment) / (1 + r)
+        balancesBeforePayment[i] = balBefore
+        bal = balBefore
+      }
+
+      for (let i = 0; i < historicalDates.length; i++) {
+        const balanceBefore = balancesBeforePayment[i]
+        const interest = Math.round(balanceBefore * r * 100) / 100
+        const principal = Math.round((monthlyPayment - interest) * 100) / 100
+        const balanceAfter = Math.max(0, balanceBefore - principal)
+        rows.push({
+          id: `loan-${loan.id}-hist-${i}`,  // отдельный неймспейс для историческия строк
+          date: historicalDates[i],
+          plannedAmount: Math.round(monthlyPayment * 100) / 100,
+          principal,
+          interest,
+          balanceBefore,
+          balanceAfter,
+        })
+      }
     }
   }
 
-  const sortedEarlyPayments = [...loan.earlyPayments]
-    .filter((ep) => new Date(ep.date) >= segmentDate)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-  const transactions: Transaction[] = []
-  let monthlyPayment = calculateAnnuityPayment(segmentBalance, loan.annualRate, segmentTerm)
-  let paymentIndex = 0
+  // ── Будущие строки (стандартная амортизация) ──────────────────────────────
+  // Индексация с 0 — совпадает со старой схемой, поэтому уже оплаченные
+  // платежи (actual_amount IS NOT NULL) корректно пропускаются по paidIds.
+  let futureIndex = 0
+  const pushRow = () => {
+    const balanceBefore = segmentBalance
+    const interest = Math.round(balanceBefore * r * 100) / 100
+    const principal = Math.round((monthlyPayment - interest) * 100) / 100
+    const balanceAfter = Math.max(0, balanceBefore - principal)
+    rows.push({
+      id: `loan-${loan.id}-${futureIndex}`,
+      date: new Date(segmentDate),
+      plannedAmount: Math.round(monthlyPayment * 100) / 100,
+      principal,
+      interest,
+      balanceBefore,
+      balanceAfter,
+    })
+    segmentBalance = balanceAfter
+    segmentTerm--
+    futureIndex++
+    segmentDate = addOneMonth(segmentDate)
+  }
 
   for (const ep of sortedEarlyPayments) {
     const epDate = new Date(ep.date)
-
-    // Generate regular payments before the early payment date
-    while (segmentDate < epDate && segmentTerm > 0) {
-      const insurance = loan.insurancePerMonth ?? 0
-      transactions.push({
-        id: `loan-${loan.id}-${paymentIndex}`,
-        date: new Date(segmentDate),
-        description: loan.name,
-        amount: -(monthlyPayment + insurance),
-        type: 'planned',
-        categoryId: loan.categoryId,
-        accountId: loan.accountId,
-      })
-      const interest = segmentBalance * r
-      segmentBalance = Math.max(0, segmentBalance - (monthlyPayment - interest))
-      segmentTerm--
-      paymentIndex++
-      segmentDate = addOneMonth(segmentDate)
-    }
-
+    while (segmentDate < epDate && segmentTerm > 0) pushRow()
     if (segmentBalance <= 0) break
-
-    // Early payment transaction (type: actual)
-    transactions.push({
-      id: `loan-${loan.id}-early-${ep.id}`,
-      date: new Date(epDate),
-      description: `${loan.name} — досрочный платёж`,
-      amount: -ep.amount,
-      type: 'actual',
-      categoryId: loan.categoryId,
-      accountId: loan.accountId,
-    })
 
     segmentBalance = Math.max(0, segmentBalance - ep.amount)
     if (segmentBalance <= 0) break
@@ -205,28 +273,12 @@ export function generateLoanTransactions(loan: Loan): Transaction[] {
         MAX_LOAN_MONTHS,
       )
     } else {
-      // reduce_payment: same term, lower payment
       monthlyPayment = calculateAnnuityPayment(segmentBalance, loan.annualRate, segmentTerm)
     }
   }
 
-  // Generate remaining regular payments
-  for (let i = 0; i < segmentTerm && segmentBalance > 0; i++) {
-    const insurance = loan.insurancePerMonth ?? 0
-    transactions.push({
-      id: `loan-${loan.id}-${paymentIndex}`,
-      date: new Date(segmentDate),
-      description: loan.name,
-      amount: -(monthlyPayment + insurance),
-      type: 'planned',
-      categoryId: loan.categoryId,
-      accountId: loan.accountId,
-    })
-    const interest = segmentBalance * r
-    segmentBalance = Math.max(0, segmentBalance - (monthlyPayment - interest))
-    paymentIndex++
-    segmentDate = addOneMonth(segmentDate)
-  }
+  for (let i = 0; segmentTerm > 0 && segmentBalance > 0; i++) pushRow()
 
-  return transactions
+  return rows
 }
+

@@ -19,6 +19,24 @@ export function accountsRoutes(db: Database): Hono {
     return c.json(rows.map(rowToAccount))
   })
 
+  app.post('/', async (c) => {
+    const body = await c.req.json<{ name: string; type: Account['type']; balance?: number }>()
+    const id = `acc-${Date.now()}`
+    db.run('INSERT INTO accounts (id, name, type, balance) VALUES (?, ?, ?, ?)', [
+      id, body.name, body.type, body.balance ?? 0,
+    ])
+    const created = db.query('SELECT * FROM accounts WHERE id = ?').get(id) as Record<string, unknown>
+    return c.json(rowToAccount(created), 201)
+  })
+
+  app.delete('/:id', (c) => {
+    const id = c.req.param('id')
+    const existing = db.query('SELECT * FROM accounts WHERE id = ?').get(id)
+    if (!existing) return c.json({ error: 'Account not found' }, 404)
+    db.run('DELETE FROM accounts WHERE id = ?', [id])
+    return c.json({ ok: true })
+  })
+
   app.put('/:id', async (c) => {
     const id = c.req.param('id')
     const body = await c.req.json<Partial<Account>>()

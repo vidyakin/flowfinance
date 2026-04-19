@@ -7,6 +7,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const locale = ref<'ru' | 'en'>('en')
   const currency = ref<'RUB' | 'USD' | 'EUR' | 'AED' | 'GBP'>('USD')
   const settingsModalOpen = ref(false)
+  const minBalance = ref<number>(0)
 
   function setTheme(t: 'light' | 'dark') {
     theme.value = t
@@ -30,6 +31,11 @@ export const useSettingsStore = defineStore('settings', () => {
     _save()
   }
 
+  function setMinBalance(amount: number) {
+    minBalance.value = amount
+    _save()
+  }
+
   function init() {
     const saved = localStorage.getItem('flowfinance-settings')
     if (saved) {
@@ -38,6 +44,7 @@ export const useSettingsStore = defineStore('settings', () => {
         if (data.theme) setTheme(data.theme)
         if (data.locale) setLocale(data.locale)
         if (data.currency) setCurrency(data.currency)
+        if (typeof data.minBalance === 'number') minBalance.value = data.minBalance
       } catch {}
     }
   }
@@ -45,7 +52,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function _save() {
     localStorage.setItem(
       'flowfinance-settings',
-      JSON.stringify({ theme: theme.value, locale: locale.value, currency: currency.value }),
+      JSON.stringify({ theme: theme.value, locale: locale.value, currency: currency.value, minBalance: minBalance.value }),
     )
   }
 
@@ -54,10 +61,12 @@ export const useSettingsStore = defineStore('settings', () => {
     locale,
     currency,
     settingsModalOpen,
+    minBalance,
     setTheme,
     toggleTheme,
     setLocale,
     setCurrency,
+    setMinBalance,
     init,
   }
 })

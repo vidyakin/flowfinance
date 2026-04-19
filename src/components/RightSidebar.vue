@@ -40,7 +40,7 @@ function dateLabel(date: Date): string {
 }
 
 function editTransaction(tx: Transaction) {
-  if (tx.type === 'planned' || tx.id.startsWith('recurring-') || tx.id.startsWith('loan-')) {
+  if (tx.id.startsWith('recurring-') || tx.id.startsWith('loan-')) {
     confirmingTransaction.value = tx
     showConfirmModal.value = true
   } else {

@@ -2,38 +2,37 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useI18n } from 'vue-i18n'
-import type { RecurringRule } from '@/types'
+import type { Transaction } from '@/types'
 
-const props = defineProps<{ modelValue: boolean; editRule?: RecurringRule }>()
+const props = defineProps<{ modelValue: boolean; date?: Date; transaction?: Transaction }>()
 const emit = defineEmits<{ 'update:modelValue': [boolean] }>()
 
 const store = useFinanceStore()
 const { t } = useI18n()
 
 const today = new Date().toISOString().slice(0, 10)
-
-const name = ref(props.editRule?.name ?? '')
-const amount = ref(props.editRule?.amount ?? 0)
+const selectedDate = ref('')
+const description = ref('')
+const amount = ref(0)
 const categoryId = ref('')
 const accountId = ref('')
-const frequency = ref<RecurringRule['frequency']>(props.editRule?.frequency ?? 'monthly')
-const startDate = ref(props.editRule?.startDate.toISOString().slice(0, 10) ?? today)
-const hasEndDate = ref(props.editRule?.endDate != null)
-const endDate = ref(
-  props.editRule?.endDate ? props.editRule.endDate.toISOString().slice(0, 10) : '',
-)
+const type = ref<'actual' | 'planned'>('actual')
 
-const flowType = ref<'income' | 'expense'>('expense')
+function dateToString(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 const categoryOptions = computed(() => store.categories.filter(c => c.type === flowType.value))
 const accountOptions = computed(() => store.accounts)
 
-const frequencies: RecurringRule['frequency'][] = ['weekly', 'biweekly', 'monthly', 'yearly']
-const freqLabels: Record<RecurringRule['frequency'], string> = {
-  weekly: t('weekly'),
-  biweekly: t('biweekly'),
-  monthly: t('monthly'),
-  yearly: t('yearly'),
-}
+const flowType = ref<'income' | 'expense'>('expense')
+const isEditing = computed(() => !!props.transaction)
+const isValid = computed(
+  () => description.value.trim() !== '' && amount.value !== 0 && selectedDate.value !== '' && !!categoryId.value && !!accountId.value,
+)
 
 function ensureDefaults() {
   const cats = categoryOptions.value
@@ -44,16 +43,23 @@ function ensureDefaults() {
 
 watch(() => props.modelValue, (open) => {
   if (open) {
-    name.value = props.editRule?.name ?? ''
-    amount.value = props.editRule ? Math.abs(props.editRule.amount) : 0
-    frequency.value = props.editRule?.frequency ?? 'monthly'
-    startDate.value = props.editRule?.startDate.toISOString().slice(0, 10) ?? today
-    hasEndDate.value = props.editRule?.endDate != null
-    endDate.value = props.editRule?.endDate ? props.editRule.endDate.toISOString().slice(0, 10) : ''
-    flowType.value = props.editRule ? (props.editRule.amount > 0 ? 'income' : 'expense') : 'expense'
-    categoryId.value = props.editRule?.categoryId ?? ''
-    accountId.value = props.editRule?.accountId ?? ''
-    ensureDefaults()
+    if (props.transaction) {
+      const cat = store.categories.find(c => c.id === props.transaction!.categoryId)
+      description.value = props.transaction.description
+      amount.value = Math.abs(props.transaction.amount)
+      selectedDate.value = dateToString(props.transaction.date)
+      categoryId.value = props.transaction.categoryId
+      accountId.value = props.transaction.accountId
+      type.value = props.transaction.type
+      flowType.value = cat?.type === 'income' ? 'income' : 'expense'
+    } else {
+      description.value = ''
+      amount.value = 0
+      selectedDate.value = props.date ? dateToString(props.date) : today
+      type.value = 'actual'
+      flowType.value = 'expense'
+      ensureDefaults()
+    }
   }
 })
 
@@ -61,10 +67,6 @@ watch(flowType, () => {
   categoryId.value = ''
   ensureDefaults()
 })
-
-const isValid = computed(
-  () => name.value.trim() !== '' && amount.value !== 0 && startDate.value !== '' && !!categoryId.value && !!accountId.value,
-)
 
 function close() {
   emit('update:modelValue', false)
@@ -76,28 +78,21 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
-function submit() {
+async function submit() {
   if (!isValid.value) return
-  const finalAmount = flowType.value === 'expense' ? -Math.abs(amount.value) : Math.abs(amount.value)
-  const rule: Omit<RecurringRule, 'id'> = {
-    name: name.value.trim(),
-    amount: finalAmount,
+  const data = {
+    date: new Date(selectedDate.value),
+    description: description.value.trim(),
+    amount: flowType.value === 'expense' ? -Math.abs(amount.value) : Math.abs(amount.value),
     categoryId: categoryId.value,
     accountId: accountId.value,
-    frequency: frequency.value,
-    startDate: new Date(startDate.value),
-    endDate: hasEndDate.value && endDate.value ? new Date(endDate.value) : null,
+    type: type.value,
   }
-  if (props.editRule) {
-    store.updateRecurringRule(props.editRule.id, rule)
+  if (isEditing.value && props.transaction) {
+    await store.updateTransaction(props.transaction.id, data)
   } else {
-    store.addRecurringRule(rule)
+    await store.addTransaction(data)
   }
-  close()
-}
-
-function deleteRule() {
-  if (props.editRule) store.removeRecurringRule(props.editRule.id)
   close()
 }
 </script>
@@ -112,7 +107,7 @@ function deleteRule() {
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
         <div class="flex items-center justify-between">
           <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">
-            {{ editRule ? t('editRecurring') : t('newRecurring') }}
+            {{ isEditing ? t('editTransaction') : t('newTransaction') }}
           </h2>
           <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" @click="close">✕</button>
         </div>
@@ -143,11 +138,47 @@ function deleteRule() {
           </button>
         </div>
 
-        <!-- Name -->
+        <!-- Plan / Actual toggle -->
+        <div class="flex gap-2">
+          <button
+            :class="[
+              'flex-1 py-2 rounded-lg text-sm font-medium transition-colors',
+              type === 'planned'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+            ]"
+            @click="type = 'planned'"
+          >
+            {{ t('plan') }}
+          </button>
+          <button
+            :class="[
+              'flex-1 py-2 rounded-lg text-sm font-medium transition-colors',
+              type === 'actual'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+            ]"
+            @click="type = 'actual'"
+          >
+            {{ t('actual') }}
+          </button>
+        </div>
+
+        <!-- Date -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('name') }}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('date') }}</label>
           <input
-            v-model="name"
+            v-model="selectedDate"
+            type="date"
+            class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('description') }}</label>
+          <input
+            v-model="description"
             type="text"
             class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
@@ -188,48 +219,13 @@ function deleteRule() {
           </select>
         </div>
 
-        <!-- Frequency -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('frequency') }}</label>
-          <select
-            v-model="frequency"
-            class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option v-for="f in frequencies" :key="f" :value="f">{{ freqLabels[f] }}</option>
-          </select>
-        </div>
-
-        <!-- Start Date -->
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('startDate') }}</label>
-          <input
-            v-model="startDate"
-            type="date"
-            class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        <!-- End Date -->
-        <div>
-          <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 cursor-pointer">
-            <input v-model="hasEndDate" type="checkbox" class="rounded" />
-            {{ t('endDate') }}
-          </label>
-          <input
-            v-if="hasEndDate"
-            v-model="endDate"
-            type="date"
-            class="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
         <!-- Actions -->
         <div class="flex gap-2 pt-2">
           <button
-            v-if="editRule"
+            v-if="isEditing"
             class="px-4 py-2 rounded-lg text-sm font-medium text-red-500 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
-            @click="deleteRule"
-          >{{ t('deleteRule') }}</button>
+            @click="async () => { await store.deleteTransaction(props.transaction!.id); close() }"
+          >{{ t('delete') }}</button>
           <div class="flex-1" />
           <button
             class="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"

@@ -1,11 +1,20 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useI18n } from 'vue-i18n'
+
+const emit = defineEmits<{ (e: 'close'): void }>()
 
 const settings = useSettingsStore()
 const { t } = useI18n()
 
 const currencies = ['USD', 'EUR', 'RUB', 'AED', 'GBP'] as const
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('close')
+}
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
@@ -88,6 +97,23 @@ const currencies = ['USD', 'EUR', 'RUB', 'AED', 'GBP'] as const
               ]"
               @click="settings.setCurrency(cur)"
             >{{ cur }}</button>
+          </div>
+        </div>
+
+        <!-- Min Balance -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+            {{ t('settings.minBalance') || 'Мин. баланс' }}
+          </h3>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-600 dark:text-gray-400">{{ t('settings.minBalance') || 'Мин. баланс (₽)' }}</span>
+            <input
+              type="number"
+              min="0"
+              :value="settings.minBalance"
+              @change="settings.setMinBalance(Number(($event.target as HTMLInputElement).value))"
+              class="w-32 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
           </div>
         </div>
       </div>
